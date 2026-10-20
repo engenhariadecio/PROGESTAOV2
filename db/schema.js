@@ -589,6 +589,32 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_cont_linhas_celula ON cont_linhas(celula);
 /* Ajustes da câmera que dependem do produto (tamanho da caixa, sensibilidade,
    várias por vez). A área do pallet, câmera e zoom ficam na linha, porque o
    pallet e a posição do aparelho são os mesmos para todos os produtos. */
+/* IA de detecção: amostras marcadas no painel (quadro + retângulos das caixas/peças)
+   e o modelo treinado a partir delas (ONNX, roda no próprio aparelho). */
+CREATE TABLE IF NOT EXISTS cont_amostras (
+  id            SERIAL PRIMARY KEY,
+  linha_id      INTEGER NOT NULL REFERENCES cont_linhas(id) ON DELETE CASCADE,
+  produto_id    INTEGER REFERENCES cad_produtos(id) ON DELETE SET NULL,
+  jpeg          BYTEA NOT NULL,
+  largura       INTEGER NOT NULL DEFAULT 480,
+  altura        INTEGER NOT NULL DEFAULT 360,
+  caixas        JSONB NOT NULL DEFAULT '[]'::jsonb,
+  usuario_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_cont_amostras_linha ON cont_amostras(linha_id, produto_id);
+CREATE TABLE IF NOT EXISTS cont_modelos (
+  id            SERIAL PRIMARY KEY,
+  linha_id      INTEGER NOT NULL REFERENCES cont_linhas(id) ON DELETE CASCADE,
+  produto_id    INTEGER REFERENCES cad_produtos(id) ON DELETE CASCADE,
+  onnx          BYTEA NOT NULL,
+  imgsz         INTEGER NOT NULL DEFAULT 416,
+  metricas      JSONB NOT NULL DEFAULT '{}'::jsonb,
+  amostras      INTEGER NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_cont_modelos_linha ON cont_modelos(linha_id, produto_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS cont_linha_produto (
   id            SERIAL PRIMARY KEY,
   linha_id      INTEGER NOT NULL REFERENCES cont_linhas(id) ON DELETE CASCADE,

@@ -100,6 +100,7 @@ body { overscroll-behavior: none; }
 
 <script src="/js/core.js"></script>
 <script src="/js/mediapipe/pose/pose.js"></script>
+<script src="/js/ort/ort.min.js"></script>
 <script src="/js/contador-cam.js"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -139,7 +140,8 @@ async function iniciar() {
     onSessao: () => atualizarPlacar(),
     onConfig: (cfg, zona) => { $('dica').style.display = zona ? 'none' : ''; $('info').innerHTML = `Sensibilidade ${cfg.sens}/10 · conta caixa colocada (+1) e retirada (−1)${cfg.caixa ? ' · tamanho da caixa marcado' : ' · aprende o tamanho da caixa sozinha'}`; },
     onOffline: off => $('offline').classList.toggle('on', off),
-    onEncerrar: () => location.href = '/cadenciador/camera'
+    onEncerrar: () => location.href = '/cadenciador/camera',
+    onModelo: m => { if (m) avisoOk('IA treinada carregada: contagem por reconhecimento das caixas.'); }
   });
   try { await cam.conectar({ linhaId: linha.id, produtoId: linha.produto_id }); }
   catch (e) { return avisoErro('Não foi possível conectar: ' + e.message); }

@@ -320,6 +320,7 @@ tbody tr.agora td:first-child { box-shadow: inset 3px 0 0 var(--verde); }
 <script src="/js/core.js"></script>
 <script src="/js/chart.umd.js"></script>
 <script src="/js/mediapipe/pose/pose.js"></script>
+<script src="/js/ort/ort.min.js"></script>
 <script src="/js/contador-cam.js"></script>
 <script>
 /* ═══════════ Estado ═══════════ */
@@ -628,8 +629,9 @@ async function conectarCamAqui() {
     hud: { ia: $c('camHudIa'), estado: $c('camHudEstado'), live: $c('camHudLive') },
     onContagem: () => atualizarPlacarCam(),
     onSessao: () => atualizarPlacarCam(),
-    onConfig: (cfg, zona) => { $c('camDica').style.display = zona ? 'none' : ''; $c('camMult').checked = !!cfg.multiplas; $c('camInfo').innerHTML = `Sensibilidade ${cfg.sens}/10 · conta caixa colocada (+1) e retirada (−1)${cfg.caixa ? ' · tamanho da caixa marcado para este produto' : ' · aprende o tamanho da caixa sozinha'} · zoom e câmera ajustam-se pelo painel no PC`; },
-    onEncerrar: () => { CAM = null; mostrarPassoCam('conectar'); }
+    onConfig: (cfg, zona) => { $c('camDica').style.display = zona ? 'none' : ''; $c('camMult').checked = !!cfg.multiplas; $c('camInfo').innerHTML = (CAM && CAM.modelo ? '<b>IA treinada</b>: reconhece as caixas/peças e conta colocada (+1) e retirada (−1)' : `Sem IA treinada ainda — contando por diferença de imagem (sensibilidade ${cfg.sens}/10). Ensine a IA no painel das câmeras › Configurar › Ensinar a IA`) + ' · zoom e câmera ajustam-se pelo painel no PC'; },
+    onEncerrar: () => { CAM = null; mostrarPassoCam('conectar'); },
+    onModelo: m => { $c('camSelo').textContent = m ? 'IA treinada ativa' : 'câmera deste aparelho'; if (m) avisoOk('IA treinada carregada: a contagem passa a ser por reconhecimento das caixas.'); }
   });
   try { await CAM.conectar({ linhaId: LINHA_CAM.id, produtoId: s.produto_id, sessaoId: s.id }); }
   catch (e) { avisoErro('Câmera: ' + e.message); CAM = null; mostrarPassoCam('conectar'); return; }

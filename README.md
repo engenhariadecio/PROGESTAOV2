@@ -36,6 +36,12 @@ Os sistemas eram independentes e guardavam dados em lugares diferentes. Agora co
 - As consultas de aniversariantes usavam `HAVING` sem `GROUP BY`, o que o Postgres rejeita. Reescritas com subquery.
 - Layout retematizado com a identidade da Décio.
 
+**IA de verdade: ensinar a câmera a reconhecer as caixas/peças (20/10/2026)**
+- Painel das câmeras › Configurar › aba **Ensinar a IA**: *Capturar quadro da câmera* → arrastar um retângulo em volta de cada caixa/peça → *Salvar*. Com 15–30 quadros marcados (pilha vazia, meio, cheia, gente passando), **Treinar IA** (5–15 min). O servidor treina um detector YOLOv8n (partindo dos pesos Open Images, que já conhecem "Box") só com as caixas daquela câmera/produto e exporta ONNX; o aparelho baixa sozinho e passa a contar **por reconhecimento**: conta as caixas detectadas dentro da área e, quando a contagem fica estável por ~2,5 s sem ninguém na frente, registra +n ou −n. Sem modelo treinado, continua a contagem por diferença de imagem.
+- Modelo por câmera e, se quiser, por produto (o produto sobrepõe o geral). "Remover modelo" volta ao modo anterior. Tabelas `cont_amostras` e `cont_modelos`; rotas `/api/contador/linhas/:id/amostras|treinar|treino|modelo`.
+- Roda no aparelho com `onnxruntime-web` (`public/js/ort/`, sem CDN). O treino precisa de Python no servidor: o novo **Dockerfile** instala Node + Python + ultralytics (o Railway usa o Dockerfile automaticamente; primeiro build demora ~10 min). Sem Python o sistema roda igual e o painel avisa que o treino está indisponível (`python/README.md`).
+- O quadro ao vivo passou a 640×480 e é guardado sem desenhos para servir de amostra.
+
 **Contador dentro do Cadenciador (20/10/2026)**
 - Não existe mais "Contador" como sistema separado (saiu do portal e do menu). O fluxo é um só, no Cadenciador: **turno → célula → produto → Iniciar linha → Conectar câmera**. Depois de iniciar, o cartão *Câmera do pallet* oferece **📷 Usar a câmera deste aparelho** ou **📱 Conectar um celular (QR)**. Com um celular conectado, o tablet mostra a imagem dele, a contagem e os botões +1/−1 (comandos remotos). A escolha "este aparelho" fica lembrada para a próxima vez.
 - Endereços: `/cadenciador/painel` (painel das câmeras: ao vivo, configurar, análise, histórico — também no botão *Painel das câmeras*) e `/cadenciador/camera` (aparelho que filma; é o link do QR). Os antigos `/contador` e `/contador/painel` continuam funcionando.

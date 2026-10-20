@@ -59,6 +59,23 @@
 .cfg .cmds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .lbl { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
 .qr { text-align: center; }
+.cfg-abas { display: flex; gap: 6px; margin-bottom: 14px; }
+.cfg-abas .btn.sel { background: var(--verde); color: #fff; border-color: var(--verde); }
+.ens { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; }
+@media (max-width: 860px) { .ens { grid-template-columns: 1fr; } }
+.ens .palco { position: relative; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 4/3; border: 1px solid var(--linha); }
+.ens .palco img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.ens .palco canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+.ens .palco .semimg { position: absolute; inset: 0; display: grid; place-items: center; color: #8aa0b0; font-size: 13px; text-align: center; padding: 20px; }
+.amostras { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; max-height: 240px; overflow: auto; }
+.amostras div { position: relative; cursor: pointer; border: 2px solid transparent; border-radius: 8px; overflow: hidden; }
+.amostras div.sel { border-color: var(--verde); }
+.amostras img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
+.amostras span { position: absolute; right: 4px; bottom: 4px; background: rgba(10,22,32,.8); color: #fff; font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 6px; }
+.amostras div.vazia span { background: rgba(220,38,38,.85); }
+.barra-prog { height: 8px; background: var(--sup); border-radius: 99px; overflow: hidden; }
+.barra-prog i { display: block; height: 100%; background: var(--verde); width: 0; transition: width .4s; }
+.modelo-ok { background: var(--fade-suave); border: 1px solid rgba(38,178,71,.3); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; }
 .qr img { width: 240px; height: 240px; background: #fff; border-radius: 12px; padding: 8px; }
 .qr code { display: block; margin-top: 10px; font-size: 13px; word-break: break-all; background: var(--sup); padding: 8px; border-radius: 8px; }
 
@@ -154,7 +171,33 @@ td img { width: 72px; height: 54px; object-fit: cover; border-radius: 6px; curso
 <div class="modal-fundo" id="mCfg"><div class="modal modal-lg" style="max-width:1100px">
   <div class="modal-topo"><div class="modal-titulo" id="cfgTit">Configurar câmera</div><button class="modal-fechar" onclick="fecharCfg()">×</button></div>
   <div class="modal-corpo">
-    <div class="cfg">
+    <div class="cfg-abas"><button class="btn btn-sm btn-fantasma sel" data-cfgaba="area">▭ Área e câmera</button><button class="btn btn-sm btn-fantasma" data-cfgaba="ia">🧠 Ensinar a IA</button></div>
+    <!-- ═══ Ensinar a IA ═══ -->
+    <div class="ens" id="cfgIa" style="display:none">
+      <div>
+        <div class="palco"><img id="ensImg" alt=""><div class="semimg" id="ensSem">Capture um quadro da câmera para começar a marcar.</div><canvas id="ensCanvas"></canvas></div>
+        <div class="modo">
+          <button class="btn btn-sm btn-primario" id="ensCapturar">📸 Capturar quadro da câmera</button>
+          <button class="btn btn-sm btn-fantasma" id="ensSalvar" disabled>💾 Salvar marcações</button>
+          <button class="btn btn-sm btn-fantasma" id="ensLimpar" disabled>Limpar</button>
+          <button class="btn btn-sm btn-fantasma" id="ensExcluir" disabled>🗑 Excluir quadro</button>
+          <span class="ajuda" id="ensDica" style="align-self:center">Arraste um retângulo em volta de <b>cada</b> caixa/peça no pallet. Clique num retângulo para apagar.</span>
+        </div>
+        <div class="ajuda" style="margin-top:8px">Como ensinar: capture 15–30 quadros com a pilha em alturas diferentes (vazio, meio, cheio, com gente passando) e marque todas as caixas/peças visíveis em cada um. Quanto mais variado, melhor a IA fica. Depois clique em <b>Treinar</b> (5–15 min). O aparelho baixa o modelo sozinho.</div>
+      </div>
+      <div class="lado">
+        <div class="grupo"><h5>Quadros marcados <span id="ensResumo"></span></h5><div class="amostras" id="ensLista"></div></div>
+        <div class="grupo"><h5>Treinar</h5>
+          <div class="campo"><span class="rotulo">Para</span><select class="controle" id="ensProduto"></select></div>
+          <div class="campo"><span class="rotulo">Qualidade</span><select class="controle" id="ensEpocas"><option value="25">Rápido (25 passadas)</option><option value="40" selected>Normal (40)</option><option value="70">Caprichado (70)</option></select></div>
+          <button class="btn btn-primario" id="ensTreinar">🧠 Treinar IA</button>
+          <div class="barra-prog" id="ensProg" style="display:none"><i></i></div>
+          <div class="ajuda" id="ensStatus"></div>
+        </div>
+        <div class="grupo"><h5>Modelo em uso</h5><div id="ensModelo" class="ajuda">Nenhum modelo treinado — a câmera usa diferença de imagem.</div><button class="btn btn-sm btn-fantasma" id="ensRemoverModelo" style="display:none">Remover modelo</button></div>
+      </div>
+    </div>
+    <div class="cfg" id="cfgArea">
       <div>
         <div class="palco"><img id="cfgImg" alt=""><div class="semimg" id="cfgSem">Aguardando a imagem do celular…</div><canvas id="cfgCanvas"></canvas></div>
         <div class="modo">
@@ -307,10 +350,11 @@ async function abrirCfg(id) {
   $('cRes').value = cfgCfg.resolucao || 'media'; $('cLant').checked = !!cfgCfg.lanterna;
   preencherCapacidades(l);
   $('cfgImg').removeAttribute('src'); $('cfgImg').dataset.ts = '';
+  document.querySelector('[data-cfgaba="area"]').click();
   abrirModal('mCfg'); atualizarCfgVivo(); desenharCfg(); resumoCfg();
   cfgTimer = setInterval(desenharCfg, 300);
 }
-function fecharCfg() { fecharModal('mCfg'); cfgLinha = null; clearInterval(cfgTimer); }
+function fecharCfg() { fecharModal('mCfg'); cfgLinha = null; clearInterval(cfgTimer); clearInterval(ensTimer); ensAmostra = null; ensSujo = false; }
 /* a config efetiva = linha ⊕ produto escolhido */
 async function carregarCfgProduto() {
   const l = cfgLinha;
@@ -396,6 +440,94 @@ document.querySelectorAll('.cmds [data-cmd]').forEach(b => b.onclick = async () 
   if (b.dataset.cmd === 'encerrar' && !confirm('Encerrar a câmera no celular?')) return;
   try { await API.post('/api/contador/linhas/' + cfgLinha.id + '/comando', { tipo: b.dataset.cmd }); $('cfgStatus').textContent = 'Comando enviado: ' + b.textContent; } catch (e) { avisoErro(e.message); }
 });
+
+/* ───────── ENSINAR A IA ───────── */
+document.querySelectorAll('[data-cfgaba]').forEach(b => b.onclick = () => { document.querySelectorAll('[data-cfgaba]').forEach(x => x.classList.toggle('sel', x === b)); $('cfgArea').style.display = b.dataset.cfgaba === 'area' ? '' : 'none'; $('cfgIa').style.display = b.dataset.cfgaba === 'ia' ? '' : 'none'; if (b.dataset.cfgaba === 'ia') abrirEnsinar(); });
+let ensAmostra = null, ensCaixas = [], ensIni = null, ensDesenho = null, ensTimer = null, ensSujo = false;
+const ensCanvas = $('ensCanvas'), ectx = ensCanvas.getContext('2d');
+async function abrirEnsinar() {
+  if (!cfgLinha) return;
+  $('ensProduto').innerHTML = '<option value="">Todos os produtos desta câmera</option>' + produtos.map(p => `<option value="${p.id}">${escapar(p.nome)}</option>`).join('');
+  $('ensProduto').value = cfgProduto || '';
+  await listarAmostras(); await infoModelo(); acompanharTreino();
+}
+$('ensProduto').onchange = () => { listarAmostras(); infoModelo(); acompanharTreino(); };
+async function listarAmostras() {
+  const pid = $('ensProduto').value;
+  const lista = await API.get(`/api/contador/linhas/${cfgLinha.id}/amostras${pid ? '?produto_id=' + pid : ''}`).catch(() => []);
+  const marc = lista.filter(a => a.n > 0).length, caixas = lista.reduce((s, a) => s + a.n, 0);
+  $('ensResumo').textContent = `${lista.length} quadros · ${marc} marcados · ${caixas} caixas`;
+  $('ensLista').innerHTML = lista.map(a => `<div class="${a.n ? '' : 'vazia'}${ensAmostra && ensAmostra.id === a.id ? ' sel' : ''}" data-id="${a.id}" title="${new Date(a.created_at).toLocaleString('pt-BR')}"><img src="/api/contador/amostras/${a.id}/jpeg" loading="lazy"><span>${a.n}</span></div>`).join('') || '<div class="ajuda" style="grid-column:1/-1">Nenhum quadro ainda.</div>';
+  $('ensLista').querySelectorAll('[data-id]').forEach(d => d.onclick = () => abrirAmostra(lista.find(a => a.id === Number(d.dataset.id))));
+}
+function abrirAmostra(a) {
+  if (ensSujo && !confirm('Há marcações não salvas. Descartar?')) return;
+  ensAmostra = a; ensCaixas = (a.caixas || []).map(c => ({ ...c })); ensSujo = false;
+  $('ensImg').src = `/api/contador/amostras/${a.id}/jpeg?t=${Date.now()}`; $('ensSem').style.display = 'none';
+  ['ensSalvar', 'ensLimpar', 'ensExcluir'].forEach(id => $(id).disabled = false);
+  $('ensLista').querySelectorAll('[data-id]').forEach(d => d.classList.toggle('sel', Number(d.dataset.id) === a.id));
+  desenharEns();
+}
+$('ensCapturar').onclick = async () => {
+  if (!cfgLinha.online) return avisoErro('A câmera não está transmitindo agora.');
+  try {
+    const r = await API.post(`/api/contador/linhas/${cfgLinha.id}/amostras`, { da_camera: true, produto_id: $('ensProduto').value || null, caixas: [] });
+    await listarAmostras(); abrirAmostra({ id: r.id, caixas: [], n: 0, created_at: r.created_at });
+    avisoOk('Quadro capturado. Marque cada caixa/peça e salve.');
+  } catch (e) { avisoErro(e.message); }
+};
+$('ensSalvar').onclick = async () => { if (!ensAmostra) return; try { const r = await API.put('/api/contador/amostras/' + ensAmostra.id, { caixas: ensCaixas }); ensSujo = false; avisoOk(`Salvo: ${r.n} caixa(s) neste quadro.`); listarAmostras(); } catch (e) { avisoErro(e.message); } };
+$('ensLimpar').onclick = () => { ensCaixas = []; ensSujo = true; desenharEns(); };
+$('ensExcluir').onclick = async () => { if (!ensAmostra || !confirm('Excluir este quadro?')) return; try { await API.del('/api/contador/amostras/' + ensAmostra.id); ensAmostra = null; ensCaixas = []; ensSujo = false; $('ensImg').removeAttribute('src'); $('ensSem').style.display = ''; ['ensSalvar', 'ensLimpar', 'ensExcluir'].forEach(id => $(id).disabled = true); listarAmostras(); desenharEns(); } catch (e) { avisoErro(e.message); } };
+function desenharEns() {
+  const W = ensCanvas.width = ensCanvas.clientWidth, H = ensCanvas.height = ensCanvas.clientHeight;
+  ectx.clearRect(0, 0, W, H);
+  ensCaixas.forEach((c, i) => { ectx.strokeStyle = '#35C95C'; ectx.lineWidth = 2; ectx.strokeRect(c.x * W, c.y * H, c.w * W, c.h * H); ectx.fillStyle = 'rgba(53,201,92,.12)'; ectx.fillRect(c.x * W, c.y * H, c.w * W, c.h * H); ectx.fillStyle = '#35C95C'; ectx.font = 'bold 11px sans-serif'; ectx.fillText(String(i + 1), c.x * W + 4, c.y * H + 12); });
+  if (ensDesenho) { ectx.strokeStyle = '#F0B429'; ectx.setLineDash([5, 3]); ectx.strokeRect(ensDesenho.x * W, ensDesenho.y * H, ensDesenho.w * W, ensDesenho.h * H); ectx.setLineDash([]); }
+  $('ensDica').innerHTML = ensAmostra ? `<b>${ensCaixas.length}</b> marcada(s) neste quadro. Arraste para marcar mais; clique numa para apagar.` : 'Arraste um retângulo em volta de <b>cada</b> caixa/peça no pallet. Clique num retângulo para apagar.';
+}
+const normEns = e => { const r = ensCanvas.getBoundingClientRect(); return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) }; };
+ensCanvas.addEventListener('pointerdown', e => { if (!ensAmostra) return; e.preventDefault(); try { ensCanvas.setPointerCapture(e.pointerId); } catch (_) {} ensIni = normEns(e); ensDesenho = { ...ensIni, w: 0, h: 0 }; });
+ensCanvas.addEventListener('pointermove', e => { if (!ensIni) return; const p = normEns(e); ensDesenho = { x: Math.min(ensIni.x, p.x), y: Math.min(ensIni.y, p.y), w: Math.abs(p.x - ensIni.x), h: Math.abs(p.y - ensIni.y) }; desenharEns(); });
+const soltarEns = () => {
+  if (!ensIni) return; const d = ensDesenho, p0 = ensIni; ensIni = null; ensDesenho = null;
+  if (d && d.w > 0.015 && d.h > 0.015) { ensCaixas.push(d); ensSujo = true; }
+  else { const i = ensCaixas.findIndex(c => p0.x >= c.x && p0.x <= c.x + c.w && p0.y >= c.y && p0.y <= c.y + c.h); if (i >= 0) { ensCaixas.splice(i, 1); ensSujo = true; } }   // clique: apaga
+  desenharEns();
+};
+ensCanvas.addEventListener('pointerup', soltarEns); ensCanvas.addEventListener('pointercancel', soltarEns);
+$('ensTreinar').onclick = async () => {
+  if (ensSujo) await $('ensSalvar').onclick();
+  try {
+    const r = await API.post(`/api/contador/linhas/${cfgLinha.id}/treinar`, { produto_id: $('ensProduto').value || null, epocas: Number($('ensEpocas').value) });
+    $('ensStatus').textContent = `Treinando com ${r.amostras} quadros…`; acompanharTreino();
+  } catch (e) { avisoErro(e.message); $('ensStatus').textContent = e.message; }
+};
+async function acompanharTreino() {
+  clearInterval(ensTimer);
+  const tick = async () => {
+    if (!cfgLinha) return clearInterval(ensTimer);
+    const pid = $('ensProduto').value;
+    const t = await API.get(`/api/contador/linhas/${cfgLinha.id}/treino${pid ? '?produto_id=' + pid : ''}`).catch(() => null);
+    if (!t || t.estado === 'nenhum') { $('ensProg').style.display = 'none'; return clearInterval(ensTimer); }
+    $('ensProg').style.display = ''; $('ensProg').querySelector('i').style.width = Math.round(100 * (t.progresso || 0) / (t.total || 1)) + '%';
+    $('ensTreinar').disabled = t.estado === 'rodando';
+    const dur = Math.round(((t.fim || Date.now()) - t.inicio) / 60000);
+    if (t.estado === 'rodando') $('ensStatus').textContent = `Treinando… passada ${t.progresso}/${t.total} · ${dur} min`;
+    else if (t.estado === 'concluido') { $('ensStatus').textContent = `Treino concluído em ${dur} min. O aparelho baixa o modelo sozinho.`; clearInterval(ensTimer); infoModelo(); }
+    else { $('ensStatus').textContent = 'Erro no treino: ' + (t.erro || '') + ' ' + (t.log || []).slice(-3).join(' | '); clearInterval(ensTimer); }
+  };
+  await tick(); ensTimer = setInterval(tick, 3000);
+}
+async function infoModelo() {
+  const pid = $('ensProduto').value;
+  const m = await API.get(`/api/contador/linhas/${cfgLinha.id}/modelo?info=1${pid ? '&produto_id=' + pid : ''}`).catch(() => null);
+  if (!m) { $('ensModelo').innerHTML = 'Nenhum modelo treinado — a câmera usa diferença de imagem.'; $('ensModelo').className = 'ajuda'; $('ensRemoverModelo').style.display = 'none'; return; }
+  const k = m.metricas || {};
+  $('ensModelo').innerHTML = `<b>IA treinada</b> em ${new Date(m.created_at).toLocaleString('pt-BR')} com ${m.amostras} quadros${m.produto_id ? '' : ' (vale para todos os produtos)'}.<br>Acerto no treino: ${k.map50 != null ? Math.round(k.map50 * 100) + '%' : '—'} · recall ${k.recall != null ? Math.round(k.recall * 100) + '%' : '—'} · ${m.imgsz}px`;
+  $('ensModelo').className = 'modelo-ok'; $('ensRemoverModelo').style.display = '';
+  $('ensRemoverModelo').onclick = async () => { if (!confirm('Remover o modelo treinado? A câmera volta a usar diferença de imagem.')) return; await API.del(`/api/contador/linhas/${cfgLinha.id}/modelo/${m.id}`).catch(e => avisoErro(e.message)); infoModelo(); };
+}
 
 /* ───────── ANÁLISE ───────── */
 function preencherLinhasAnalise() {

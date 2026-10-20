@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const QRCode = require('qrcode');
+const { spawn, execFile } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { pool } = require('../db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 
@@ -18,7 +22,7 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 
 const QUADROS = new Map();    // linha_id -> { buf, ts, contagem, estado, dispositivo, usuario, capacidades }
 const COMANDOS = new Map();   // linha_id -> [{ tipo, valor, ts }]
-const QUADRO_MAX = 400 * 1024;
+const QUADRO_MAX = 600 * 1024;
 const FOTO_MAX = 200 * 1024;
 const VIVO_MS = 8000;
 
@@ -232,8 +236,10 @@ router.get('/linhas/:id/estado', requireAuth, async (req, res) => {
     const params = [l.id, data]; let where = `linha_id = $1 AND ${diaLocal('ts', 2)}`;
     if (sessao) { params.push(sessao.id); where += ` AND sessao_id = $3`; }
     const cont = (await pool.query(`SELECT COALESCE(SUM(valor), 0)::int AS c FROM cont_eventos WHERE ${where}`, params)).rows[0].c;
+    const modelo = await modeloAtual(l.id, l.config_produto_id);
     res.json({ linha: { id: l.id, celula: l.celula, nome: l.nome, produto_id: l.config_produto_id, produto_nome: l.produto_nome, takt_padrao: l.takt_padrao },
-      config: l.config, config_ts: l.updated_at, sessao, contagem: cont, comandos, agora: Date.now() });
+      config: l.config, config_ts: l.updated_at, sessao, contagem: cont, comandos, agora: Date.now(),
+      modelo: modelo ? { id: modelo.id, imgsz: modelo.imgsz, created_at: modelo.created_at, metricas: modelo.metricas } : null });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -248,7 +254,7 @@ router.get('/linhas/:id/qr.svg', requireAuth, async (req, res) => {
 /* ───────── Ao vivo ───────── */
 
 router.post('/frame', requireAuth, (req, res) => {
-  const { linha_id, contagem, estado, dispositivo, jpeg, capacidades, produto_id, sessao_id } = req.body || {};
+  const { linha_id, contagem, estado, dispositivo, jpeg, jpeg_limpo, capacidades, produto_id, sessao_id } = req.body || {};
   if (!idOk(linha_id)) return res.status(400).json({ error: 'Linha obrigatória' });
   const buf = b64jpeg(jpeg);
   if (!buf) return res.status(400).json({ error: 'Quadro inválido' });
@@ -256,7 +262,7 @@ router.post('/frame', requireAuth, (req, res) => {
   const id = Number(linha_id);
   const ant = QUADROS.get(id) || {};
   QUADROS.set(id, {
-    buf, ts: Date.now(), contagem: Number(contagem) || 0,
+    buf, limpo: b64jpeg(jpeg_limpo) || buf, ts: Date.now(), contagem: Number(contagem) || 0,
     estado: String(estado || '').slice(0, 40), dispositivo: String(dispositivo || '').slice(0, 120),
     usuario: req.session.nome || req.session.username,
     produto_id: idOk(produto_id) ? Number(produto_id) : null, sessao_id: idOk(sessao_id) ? Number(sessao_id) : null,
@@ -378,6 +384,140 @@ router.get('/historico', requireAuth, async (req, res) => {
         ORDER BY (e.ts AT TIME ZONE '${FUSO}')::date DESC, e.celula`);
     res.json(r.rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* ═══════════ IA de detecção: amostras → treino → modelo ═══════════
+   O painel captura quadros da câmera e o usuário marca cada caixa/peça.
+   O servidor treina (python/treinar.py, YOLOv8n a partir dos pesos Open Images)
+   e guarda o ONNX; o aparelho baixa e roda localmente (onnxruntime-web). */
+
+const PY = process.env.PYTHON_BIN || 'python3';
+const TREINOS = new Map();   // chave linha:produto -> { estado, progresso, total, log, inicio, fim, erro }
+const chaveTreino = (l, p) => `${l}:${p || 0}`;
+let pyDisponivel = null;
+function verificarPython(cb) {
+  if (pyDisponivel !== null) return cb(pyDisponivel);
+  execFile(PY, ['-c', 'import ultralytics, onnx; print(ultralytics.__version__)'], { timeout: 60000 }, (err, out) => {
+    pyDisponivel = err ? { ok: false, motivo: (err.message || '').split('\n')[0].slice(0, 200) } : { ok: true, versao: String(out).trim() };
+    cb(pyDisponivel);
+  });
+}
+
+router.get('/treino/disponivel', requireAuth, (req, res) => verificarPython(d => res.json(d)));
+
+/* amostras */
+router.get('/linhas/:id/amostras', requireAuth, async (req, res) => {
+  try {
+    const params = [req.params.id]; let where = 'linha_id = $1';
+    if (idOk(req.query.produto_id)) { params.push(Number(req.query.produto_id)); where += ' AND produto_id = $2'; }
+    const r = await pool.query(`SELECT id, produto_id, largura, altura, caixas, created_at, jsonb_array_length(caixas) AS n FROM cont_amostras WHERE ${where} ORDER BY created_at DESC`, params);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.get('/amostras/:id/jpeg', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT jpeg FROM cont_amostras WHERE id = $1', [req.params.id]);
+    if (!r.rows[0]) return res.status(404).end();
+    res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400' }).send(r.rows[0].jpeg);
+  } catch (e) { res.status(500).end(); }
+});
+router.post('/linhas/:id/amostras', requireAuth, naoPcp, async (req, res) => {
+  try {
+    const { produto_id, jpeg, caixas, largura, altura, da_camera } = req.body || {};
+    let buf = b64jpeg(jpeg);
+    if (!buf && da_camera) { const q = QUADROS.get(Number(req.params.id)); buf = q && (q.limpo || q.buf); }   // usa o último quadro ao vivo, sem os desenhos
+    if (!buf) return res.status(400).json({ error: 'Sem imagem (a câmera está transmitindo?)' });
+    const cx = Array.isArray(caixas) ? caixas.filter(c => c && isFinite(c.x) && isFinite(c.y) && isFinite(c.w) && isFinite(c.h) && c.w > 0.005 && c.h > 0.005).map(c => ({ x: +c.x, y: +c.y, w: +c.w, h: +c.h })) : [];
+    const r = await pool.query(
+      `INSERT INTO cont_amostras (linha_id, produto_id, jpeg, largura, altura, caixas, usuario_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, created_at`,
+      [req.params.id, idOk(produto_id) ? Number(produto_id) : null, buf, Number(largura) || 640, Number(altura) || 480, JSON.stringify(cx), req.session.userId || null]);
+    res.json({ ...r.rows[0], n: cx.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.put('/amostras/:id', requireAuth, naoPcp, async (req, res) => {
+  try {
+    const cx = (Array.isArray(req.body.caixas) ? req.body.caixas : []).filter(c => c && isFinite(c.x) && c.w > 0.005 && c.h > 0.005).map(c => ({ x: +c.x, y: +c.y, w: +c.w, h: +c.h }));
+    await pool.query('UPDATE cont_amostras SET caixas = $2 WHERE id = $1', [req.params.id, JSON.stringify(cx)]);
+    res.json({ ok: true, n: cx.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.delete('/amostras/:id', requireAuth, naoPcp, async (req, res) => {
+  try { await pool.query('DELETE FROM cont_amostras WHERE id = $1', [req.params.id]); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* modelo treinado (o aparelho baixa) */
+async function modeloAtual(linhaId, produtoId) {
+  const r = await pool.query(
+    `SELECT id, produto_id, imgsz, metricas, amostras, created_at FROM cont_modelos WHERE linha_id = $1 AND (produto_id = $2 OR produto_id IS NULL)
+      ORDER BY (produto_id IS NOT NULL) DESC, created_at DESC LIMIT 1`, [linhaId, idOk(produtoId) ? Number(produtoId) : null]);
+  return r.rows[0] || null;
+}
+router.get('/linhas/:id/modelo', requireAuth, async (req, res) => {
+  try {
+    const m = await modeloAtual(req.params.id, req.query.produto_id);
+    if (!m) return res.status(404).json({ error: 'Sem modelo treinado' });
+    if (req.query.info) return res.json(m);
+    const r = await pool.query('SELECT onnx FROM cont_modelos WHERE id = $1', [m.id]);
+    res.set({ 'Content-Type': 'application/octet-stream', 'Cache-Control': 'private, max-age=3600', 'X-Modelo-Id': String(m.id), 'X-Imgsz': String(m.imgsz) }).send(r.rows[0].onnx);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.delete('/linhas/:id/modelo/:mid', requireAuth, naoPcp, async (req, res) => {
+  try { await pool.query('DELETE FROM cont_modelos WHERE id = $1 AND linha_id = $2', [req.params.mid, req.params.id]); await pool.query('UPDATE cont_linhas SET updated_at = NOW() WHERE id = $1', [req.params.id]); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* treino */
+router.get('/linhas/:id/treino', requireAuth, (req, res) => {
+  const t = TREINOS.get(chaveTreino(req.params.id, req.query.produto_id));
+  res.json(t ? { ...t, log: t.log.slice(-12) } : { estado: 'nenhum' });
+});
+router.post('/linhas/:id/treinar', requireAuth, naoPcp, async (req, res) => {
+  const linhaId = Number(req.params.id), produtoId = idOk(req.body && req.body.produto_id) ? Number(req.body.produto_id) : null;
+  const chave = chaveTreino(linhaId, produtoId);
+  if ([...TREINOS.values()].some(t => t.estado === 'rodando')) return res.status(409).json({ error: 'Já existe um treino rodando. Aguarde terminar.' });
+  verificarPython(async d => {
+    if (!d.ok) return res.status(503).json({ error: 'Treino indisponível neste servidor: ' + d.motivo + '. Veja python/README no projeto.' });
+    try {
+      const params = [linhaId]; let where = 'linha_id = $1';
+      if (produtoId) { params.push(produtoId); where += ' AND produto_id = $2'; }
+      const am = (await pool.query(`SELECT id, jpeg, largura, altura, caixas FROM cont_amostras WHERE ${where}`, params)).rows;
+      const marcadas = am.filter(a => (a.caixas || []).length);
+      if (marcadas.length < 3) return res.status(400).json({ error: `Marque caixas em pelo menos 3 quadros (há ${marcadas.length}). O ideal são 15 ou mais, com a pilha em alturas diferentes.` });
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'treino-'));
+      fs.mkdirSync(path.join(dir, 'images')); fs.mkdirSync(path.join(dir, 'labels'));
+      for (const a of am) {
+        fs.writeFileSync(path.join(dir, 'images', `a${a.id}.jpg`), a.jpeg);
+        fs.writeFileSync(path.join(dir, 'labels', `a${a.id}.txt`), (a.caixas || []).map(c => `0 ${(c.x + c.w / 2).toFixed(5)} ${(c.y + c.h / 2).toFixed(5)} ${c.w.toFixed(5)} ${c.h.toFixed(5)}`).join('\n') + '\n');
+      }
+      const saida = path.join(dir, 'modelo.onnx');
+      const epocas = Math.min(80, Math.max(5, Number(req.body.epocas) || 40)), imgsz = [320, 416, 480, 640].includes(Number(req.body.imgsz)) ? Number(req.body.imgsz) : 416;
+      const t = { estado: 'rodando', progresso: 0, total: epocas, log: [], inicio: Date.now(), fim: null, erro: null, amostras: am.length };
+      TREINOS.set(chave, t);
+      const proc = spawn(PY, [path.join(__dirname, '..', 'python', 'treinar.py'), '--dados', dir, '--saida', saida, '--epocas', String(epocas), '--imgsz', String(imgsz), '--batch', '4'], { env: { ...process.env, YOLO_VERBOSE: 'False', OMP_NUM_THREADS: '2' } });
+      const ler = (chunk) => String(chunk).split('\n').forEach(l => {
+        l = l.trim(); if (!l) return;
+        const m = /^PROGRESSO (\d+)\/(\d+)/.exec(l); if (m) { t.progresso = Number(m[1]); t.total = Number(m[2]); }
+        const k = /^METRICAS (.+)$/.exec(l); if (k) { try { t.metricas = JSON.parse(k[1]); } catch (_) {} }
+        if (/^(PROGRESSO|METRICAS|ERRO|Error|error|Traceback)/.test(l) || l.length < 160) t.log.push(l.slice(0, 200)); if (t.log.length > 60) t.log.shift();
+      });
+      proc.stdout.on('data', ler); proc.stderr.on('data', ler);
+      proc.on('close', async code => {
+        t.fim = Date.now();
+        try {
+          if (code !== 0 || !fs.existsSync(saida)) throw new Error('Treino terminou com erro (código ' + code + '): ' + t.log.filter(l => /ERRO|Error/.test(l)).slice(-2).join(' | '));
+          const onnx = fs.readFileSync(saida);
+          const r = await pool.query('INSERT INTO cont_modelos (linha_id, produto_id, onnx, imgsz, metricas, amostras) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+            [linhaId, produtoId, onnx, imgsz, JSON.stringify(t.metricas || {}), am.length]);
+          await pool.query('UPDATE cont_linhas SET updated_at = NOW() WHERE id = $1', [linhaId]);   // o aparelho vê config_ts mudar e baixa o modelo
+          t.estado = 'concluido'; t.modelo_id = r.rows[0].id; t.tamanho = onnx.length;
+        } catch (e) { t.estado = 'erro'; t.erro = e.message; }
+        fs.rm(dir, { recursive: true, force: true }, () => {});
+      });
+      proc.on('error', e => { t.estado = 'erro'; t.erro = e.message; t.fim = Date.now(); });
+      res.json({ ok: true, amostras: am.length, epocas, imgsz });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
 });
 
 module.exports = router;

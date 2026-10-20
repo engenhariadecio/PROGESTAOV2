@@ -29,7 +29,7 @@ window.ContadorCam = (function () {
     const video = o.video, sobre = o.canvas, sctx = sobre ? sobre.getContext('2d') : null;
     const proc = document.createElement('canvas'); proc.width = PROC_W; proc.height = PROC_H;
     const pctx = proc.getContext('2d', { willReadFrequently: true });
-    const envio = document.createElement('canvas'); envio.width = 480; envio.height = 360;
+    const envio = document.createElement('canvas'); envio.width = 640; envio.height = 480;   // também vira amostra de treino: resolução conta
     const ectx = envio.getContext('2d');
 
     const S = {   // estado interno
@@ -38,7 +38,8 @@ window.ContadorCam = (function () {
       estado: 'calibrando', livreDesde: 0, confirmandoDesde: 0, ultimaContagemTs: 0, ultimoQuadro: null, pessoaBox: null,
       contagem: 0, eventos: [], fila: [], pausado: false, ultimoEnvio: 0, ultimoPose: 0, posePronto: false, poseOcupado: false, iaOk: false,
       capacidades: null, capEnviadas: false, zonaEditadaLocal: false, desenhando: null, ativo: false, timers: [], fps: 0, fpsT: 0, fpsN: 0, raf: 0,
-      tamanhos: [], fundo: null, caixaCor: null
+      tamanhos: [], fundo: null, caixaCor: null,
+      modelo: null, modeloId: null, modeloCarregando: false, dets: [], detOcupado: false, ultimaDet: 0, contEstavel: null, histCont: [], detErro: null
     };
     try { S.fila = JSON.parse(localStorage.getItem('contador.fila') || '[]'); } catch (_) {}
     const hud = (k, txt, cls) => { const el = o.hud && o.hud[k]; if (!el) return; if (txt != null) el.textContent = txt; if (cls != null) el.className = 'selo-hud ' + cls; };
@@ -100,6 +101,8 @@ window.ContadorCam = (function () {
       if (primeira || e.config_ts !== S.cfgTs) { S.cfgTs = e.config_ts; aplicarConfig(e.config, primeira); }
       if (!primeira && e.contagem !== S.contagem && !S.fila.length) { S.contagem = e.contagem; o.onContagem && o.onContagem(S.contagem); }
       for (const c of e.comandos || []) executarComando(c);
+      const mid = e.modelo ? e.modelo.id : null;
+      if (mid !== S.modeloId && !S.modeloCarregando) carregarModelo(e.modelo);
       o.onSessao && o.onSessao(S.sessao, S.contagem, S.eventos);
     }
     function aplicarConfig(novo, primeira) {
@@ -121,7 +124,7 @@ window.ContadorCam = (function () {
       else if (c.tipo === 'reiniciar_camera') abrirCamera().catch(e => avisoErro('Câmera: ' + e.message));
       else if (c.tipo === 'encerrar') { parar(); o.onEncerrar && o.onEncerrar(); }
     }
-    function recalibrar() { S.ref = null; S.refAnterior = null; S.fundo = null; S.estado = 'calibrando'; S.livreDesde = 0; }
+    function recalibrar() { S.ref = null; S.refAnterior = null; S.fundo = null; S.estado = 'calibrando'; S.livreDesde = 0; S.contEstavel = null; S.histCont = []; }
 
     /* ───────── análise da área ───────── */
     function zonaPx() { const z = S.zona; return { x: Math.round(z.x * PROC_W), y: Math.round(z.y * PROC_H), w: Math.max(8, Math.round(z.w * PROC_W)), h: Math.max(8, Math.round(z.h * PROC_H)) }; }
@@ -219,7 +222,8 @@ window.ContadorCam = (function () {
       S.fpsN++; if (t - S.fpsT > 1000) { S.fps = S.fpsN; S.fpsN = 0; S.fpsT = t; }
       pctx.drawImage(video, 0, 0, PROC_W, PROC_H);
       if (S.pose && S.posePronto && !S.poseOcupado && t - S.ultimoPose > 180) { S.ultimoPose = t; S.poseOcupado = true; S.pose.send({ image: proc }).catch(() => {}).finally(() => { S.poseOcupado = false; }); }
-      if (S.zona && !S.pausado) analisar(t);
+      if (S.modelo && !S.detOcupado && t - S.ultimaDet > 600 && !S.pausado) { S.ultimaDet = t; detectar(t); }
+      if (S.zona && !S.pausado && !S.modelo) analisar(t);
       desenhar();
       if (t - S.ultimoEnvio > ENVIO_MS) { S.ultimoEnvio = t; enviarQuadro(); }
     }
@@ -264,6 +268,86 @@ window.ContadorCam = (function () {
         return;
       }
       if (S.ref) { for (let i = 0; i < N; i++) S.ref.g[i] += (atual.g[i] - S.ref.g[i]) * 0.02; for (let i = 0; i < N * 3; i++) S.ref.rgb[i] += (atual.rgb[i] - S.ref.rgb[i]) * 0.02; }
+    }
+
+    /* ───────── IA de detecção (modelo treinado com as amostras desta câmera) ─────────
+       Roda no próprio aparelho com onnxruntime-web. Conta as caixas/peças detectadas
+       dentro da área; quando a contagem fica estável por ~2,5 s sem ninguém na frente
+       e difere da última estável, registra +n (colocadas) ou −n (retiradas). */
+    async function carregarModelo(info) {
+      if (!info) { S.modelo = null; S.modeloId = null; S.dets = []; S.contEstavel = null; hud('ia', 'IA: sem modelo treinado — usando diferença de imagem', 'alerta'); o.onModelo && o.onModelo(null); return; }
+      if (typeof ort === 'undefined') { S.detErro = 'onnxruntime não carregado'; hud('ia', 'IA: biblioteca não carregada', 'erro'); return; }
+      S.modeloCarregando = true;
+      try {
+        ort.env.wasm.wasmPaths = '/js/ort/';
+        ort.env.wasm.numThreads = (self.crossOriginIsolated && navigator.hardwareConcurrency > 2) ? 2 : 1;
+        const r = await fetch(`/api/contador/linhas/${S.linhaId}/modelo?produto_id=${S.produtoId || ''}`);
+        if (!r.ok) throw new Error('modelo não encontrado');
+        const buf = await r.arrayBuffer();
+        const sess = await ort.InferenceSession.create(buf, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+        S.modelo = { id: info.id, imgsz: info.imgsz || 416, sess, entrada: sess.inputNames[0], saida: sess.outputNames[0], metricas: info.metricas };
+        S.modeloId = info.id; S.contEstavel = null; S.histCont = []; S.detErro = null;
+        hud('ia', 'IA: modelo treinado carregado', 'on');
+        o.onModelo && o.onModelo(S.modelo);
+      } catch (e) { S.detErro = e.message; S.modelo = null; hud('ia', 'IA: falha ao carregar modelo (' + e.message + ')', 'erro'); }
+      S.modeloCarregando = false;
+    }
+    const det = document.createElement('canvas'); const dctx = det.getContext('2d', { willReadFrequently: true });
+    async function detectar(t) {
+      const m = S.modelo; if (!m || !video.videoWidth) return;
+      S.detOcupado = true;
+      try {
+        const sz = m.imgsz, vw = video.videoWidth, vh = video.videoHeight, s = sz / Math.max(vw, vh);
+        const dw = Math.round(vw * s), dh = Math.round(vh * s), ox = Math.floor((sz - dw) / 2), oy = Math.floor((sz - dh) / 2);
+        det.width = sz; det.height = sz; dctx.fillStyle = 'rgb(114,114,114)'; dctx.fillRect(0, 0, sz, sz); dctx.drawImage(video, ox, oy, dw, dh);
+        const px = dctx.getImageData(0, 0, sz, sz).data, n = sz * sz, f = new Float32Array(3 * n);
+        for (let i = 0; i < n; i++) { f[i] = px[i * 4] / 255; f[n + i] = px[i * 4 + 1] / 255; f[2 * n + i] = px[i * 4 + 2] / 255; }
+        const out = await m.sess.run({ [m.entrada]: new ort.Tensor('float32', f, [1, 3, sz, sz]) });
+        const o2 = out[m.saida], d = o2.data, A = o2.dims[2], C = o2.dims[1];   // [1, 4+nc, A]
+        const cand = [];
+        for (let a = 0; a < A; a++) {
+          let sc = 0; for (let c = 4; c < C; c++) sc = Math.max(sc, d[c * A + a]);
+          if (sc < 0.35) continue;
+          const cx = d[a], cy = d[A + a], w = d[2 * A + a], h = d[3 * A + a];
+          cand.push({ x: (cx - w / 2 - ox) / s / vw, y: (cy - h / 2 - oy) / s / vh, w: w / s / vw, h: h / s / vh, sc });
+        }
+        cand.sort((p, q) => q.sc - p.sc);
+        const fin = [];
+        for (const c of cand) { if (fin.every(k => iou(k, c) < 0.45)) fin.push(c); if (fin.length >= 60) break; }
+        S.dets = fin;
+        const z = S.zona;
+        const dentro = z ? fin.filter(b => { const cx = b.x + b.w / 2, cy = b.y + b.h / 2; return cx >= z.x && cx <= z.x + z.w && cy >= z.y && cy <= z.y + z.h; }) : fin;
+        avaliarContagem(dentro.length, t);
+      } catch (e) { S.detErro = e.message; }
+      S.detOcupado = false;
+    }
+    function iou(a, b) {
+      const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)), iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+      const i = ix * iy; return i / (a.w * a.h + b.w * b.h - i + 1e-9);
+    }
+    /* presença (pessoa/movimento) segura a avaliação; contagem estável por 2,5 s muda o total */
+    function avaliarContagem(n, t) {
+      if (!S.zona) { S.estado = 'livre'; return; }
+      const presenca = sobrepoe(S.pessoaBox) || movimentoRecente(t);
+      if (presenca) { S.estado = 'ocupado'; S.histCont = []; return; }
+      S.histCont.push({ n, t }); S.histCont = S.histCont.filter(h => t - h.t <= 2500);
+      const estavel = S.histCont.length >= 3 && S.histCont.every(h => h.n === n) && t - S.histCont[0].t >= 2200;
+      if (S.contEstavel === null) { S.estado = 'calibrando'; if (estavel) { S.contEstavel = n; S.estado = 'livre'; } return; }
+      if (n === S.contEstavel) { S.estado = 'livre'; return; }
+      if (!estavel) { S.estado = 'confirmando'; return; }
+      const delta = n - S.contEstavel;
+      if (delta <= -5 && n <= 1) { registrar('troca_pallet', 0, null); }           // pallet cheio saiu
+      else if (delta >= 5 && S.contEstavel <= 1) { registrar('troca_pallet', 0, null); }   // chegou um pallet já com caixas
+      else if (delta > 0) registrar('ia', Math.min(4, delta), null);
+      else registrar('ia_retirada', Math.min(4, -delta), null);
+      S.contEstavel = n; S.estado = 'livre';
+    }
+    function movimentoRecente(t) {
+      if (!S.zona) return false;
+      const atual = amostraZona();
+      const mov = S.ultimoQuadro ? comparar(atual.g, S.ultimoQuadro.g, 16).frac : 0;
+      S.ultimoQuadro = atual;
+      return mov > 0.015;
     }
 
     /* ───────── registro ───────── */
@@ -315,9 +399,10 @@ window.ContadorCam = (function () {
         sctx.fillStyle = 'rgba(53,201,92,.08)'; sctx.fillRect(mapX(z.x), mapY(z.y), z.w / sw * W, z.h / sh * H);
         if (S.cfg.caixa && S.cfg.caixa_pos) { sctx.strokeStyle = 'rgba(240,180,41,.8)'; sctx.lineWidth = 1.5; sctx.setLineDash([4, 3]); sctx.strokeRect(mapX(S.cfg.caixa_pos.x), mapY(S.cfg.caixa_pos.y), S.cfg.caixa.w / sw * W, S.cfg.caixa.h / sh * H); sctx.setLineDash([]); }
       }
+      if (S.modelo) { sctx.lineWidth = 2; for (const b of S.dets) { const cx = b.x + b.w / 2, cy = b.y + b.h / 2, z = S.zona, dentro = !z || (cx >= z.x && cx <= z.x + z.w && cy >= z.y && cy <= z.y + z.h); sctx.strokeStyle = dentro ? 'rgba(53,201,92,.95)' : 'rgba(255,255,255,.35)'; sctx.strokeRect(mapX(b.x), mapY(b.y), b.w / sw * W, b.h / sh * H); } }
       if (S.pessoaBox) { sctx.strokeStyle = 'rgba(86,182,224,.9)'; sctx.lineWidth = 2; sctx.strokeRect(mapX(S.pessoaBox.x), mapY(S.pessoaBox.y), S.pessoaBox.w / sw * W, S.pessoaBox.h / sh * H); }
       const nomes = { calibrando: 'Calibrando — saia da frente do pallet', livre: 'Livre', ocupado: 'Pessoa no pallet', assentando: 'Conferindo…', confirmando: 'Confirmando…' };
-      const txt = (S.pausado ? 'PAUSADO · ' : '') + (S.zona ? nomes[S.estado] : 'Sem área marcada') + ' · ' + S.fps + ' fps';
+      const txt = (S.pausado ? 'PAUSADO · ' : '') + (S.zona ? nomes[S.estado] : 'Sem área marcada') + (S.modelo ? ' · IA vê ' + S.dets.length + (S.contEstavel != null ? ' (estável ' + S.contEstavel + ')' : '') : '') + ' · ' + S.fps + ' fps';
       hud('estado', txt, S.estado === 'ocupado' ? 'alerta' : S.estado === 'livre' ? 'on' : '');
       o.onEstado && o.onEstado(S.zona ? S.estado : 'sem_area', txt);
       desenhar.map = { sx, sy, sw, sh };
@@ -349,12 +434,14 @@ window.ContadorCam = (function () {
     async function enviarQuadro() {
       if (enviandoQuadro || !video.videoWidth) return; enviandoQuadro = true;
       try {
-        ectx.drawImage(video, 0, 0, 480, 360);
-        if (S.zona) { ectx.strokeStyle = S.estado === 'ocupado' ? 'rgba(240,180,41,.9)' : 'rgba(53,201,92,.9)'; ectx.lineWidth = 2; ectx.strokeRect(S.zona.x * 480, S.zona.y * 360, S.zona.w * 480, S.zona.h * 360); }
-        ectx.fillStyle = 'rgba(10,22,32,.7)'; ectx.fillRect(0, 0, 480, 26);
+        ectx.drawImage(video, 0, 0, 640, 480);
+        const quadroLimpo = envio.toDataURL('image/jpeg', 0.6);   // sem desenhos: é o que vira amostra de treino
+        if (S.zona) { ectx.strokeStyle = S.estado === 'ocupado' ? 'rgba(240,180,41,.9)' : 'rgba(53,201,92,.9)'; ectx.lineWidth = 2; ectx.strokeRect(S.zona.x * 640, S.zona.y * 480, S.zona.w * 640, S.zona.h * 480); }
+        if (S.modelo) { ectx.lineWidth = 1.5; ectx.strokeStyle = 'rgba(53,201,92,.9)'; for (const b of S.dets) ectx.strokeRect(b.x * 640, b.y * 480, b.w * 640, b.h * 480); }
+        ectx.fillStyle = 'rgba(10,22,32,.7)'; ectx.fillRect(0, 0, 640, 26);
         ectx.fillStyle = '#fff'; ectx.font = 'bold 14px sans-serif';
         ectx.fillText(`${(S.linha && (S.linha.nome || S.linha.celula)) || ''}  ·  ${S.contagem} un  ·  ${new Date().toLocaleTimeString('pt-BR')}`, 10, 18);
-        const body = { linha_id: S.linhaId, produto_id: S.produtoId, sessao_id: S.sessaoId || (S.sessao ? S.sessao.id : null), contagem: S.contagem, estado: S.zona ? S.estado : 'sem_area', dispositivo: disp, jpeg: envio.toDataURL('image/jpeg', 0.55) };
+        const body = { linha_id: S.linhaId, produto_id: S.produtoId, sessao_id: S.sessaoId || (S.sessao ? S.sessao.id : null), contagem: S.contagem, estado: S.zona ? S.estado : 'sem_area', dispositivo: disp, jpeg: envio.toDataURL('image/jpeg', 0.55), jpeg_limpo: quadroLimpo };
         if (S.capacidades && !S.capEnviadas) body.capacidades = S.capacidades;
         const r = await fetch('/api/contador/frame', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         if (r.status === 401) location.href = '/login';
@@ -392,7 +479,7 @@ window.ContadorCam = (function () {
       conectar, parar, trocarSessao, registrar: (origem) => registrar(origem, 0, null), recalibrar: () => { recalibrar(); },
       trocaPallet: () => { recalibrar(); registrar('troca_pallet', 0, null); },
       modoDesenho: m => { modoDesenho = m; }, salvarConfig, estado: S,
-      get contagem() { return S.contagem; }, get sessao() { return S.sessao; }, get eventos() { return S.eventos; }, get cfg() { return S.cfg; }, get zona() { return S.zona; }, get ativo() { return S.ativo; }
+      get modelo() { return S.modelo; }, get dets() { return S.dets; }, get contagem() { return S.contagem; }, get sessao() { return S.sessao; }, get eventos() { return S.eventos; }, get cfg() { return S.cfg; }, get zona() { return S.zona; }, get ativo() { return S.ativo; }
     };
   }
   return { criar, CFG_PADRAO };
