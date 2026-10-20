@@ -26,7 +26,7 @@ function requireAdmin(req, res, next) {
  * 403 (API) ou vai para /progestao/producao (página). Assim, mesmo digitando
  * uma URL ou chamando a API direto, o usuário não vê nem altera o resto.
  */
-const PCP_PAGINAS = ['/login', '/progestao/producao', '/contador/painel'];
+const PCP_PAGINAS = ['/login', '/progestao/producao', '/cadenciador/painel', '/contador/painel'];
 const PCP_API_LEITURA = /^\/api\/(me|prod-planos|prod-apontamentos|prod-apontamentos-detalhados|prod-produtos|prod-celulas|contador|export\/contador|cadenciador\/sessoes|fotos\/produto|fotos\/arquivo)(\/|$|\?)/;   // fotos: só as dos produtos
 const PCP_API_LIVRE = /^\/api\/(logout|login)$/;
 
@@ -40,7 +40,7 @@ function restringirPcp(req, res, next) {
     return res.status(403).json({ error: 'Perfil PCP: somente visualização de Produção' });
   }
   if (PCP_PAGINAS.includes(p)) return next();
-  if (p === '/contador') return res.redirect('/contador/painel');   // PCP só assiste; não liga câmera
+  if (p === '/contador' || p === '/cadenciador/camera' || p === '/cadenciador') return res.redirect('/cadenciador/painel');   // PCP só assiste; não liga câmera
   return res.redirect('/progestao/producao');
 }
 

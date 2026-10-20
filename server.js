@@ -95,8 +95,9 @@ app.get('/ponto', requireAuth, (_req, res) => res.sendFile(pagina('ponto.html'))
 app.get('/cadenciador', requireAuth, (_req, res) => res.sendFile(pagina('cadenciador.html')));
 
 // Contador por câmera (celular na linha) e painel ao vivo
-app.get('/contador', requireAuth, (_req, res) => res.sendFile(pagina('contador.html')));
-app.get('/contador/painel', requireAuth, (_req, res) => res.sendFile(pagina('contador-painel.html')));
+// Câmera do pallet faz parte do Cadenciador: /cadenciador/camera (aparelho que filma) e /cadenciador/painel (ver/configurar de qualquer lugar)
+app.get(['/cadenciador/camera', '/contador'], requireAuth, (_req, res) => res.sendFile(pagina('contador.html')));
+app.get(['/cadenciador/painel', '/contador/painel'], requireAuth, (_req, res) => res.sendFile(pagina('contador-painel.html')));
 
 // Sistema 3 — ProGestão
 const MODULOS_PROGESTAO = [

@@ -110,9 +110,9 @@
     <a class="sistema" href="/cadenciador">
       <span class="sistema-num">SISTEMA 02</span>
       <h2>Cadenciador de Produção</h2>
-      <p>Cadência da linha por takt time, com avisos de voz, pausa de linha cronometrada e recálculo automático dos ciclos.</p>
+      <p>Cadência da linha por takt time com avisos de voz, parada cronometrada e câmera do pallet que conta a produção (colocada/retirada) e compara com o takt em tempo real.</p>
       <div class="sistema-itens">
-        <span>Takt por turno</span><span>Avisos de voz</span><span>Parada de linha</span><span>Painel de chão</span>
+        <span>Takt por turno</span><span>Avisos de voz</span><span>Câmera do pallet</span><span>Painel das câmeras</span>
       </div>
       <div class="sistema-rodape">
         <span class="sistema-abrir">Abrir sistema →</span>
@@ -120,21 +120,8 @@
       </div>
     </a>
 
-    <a class="sistema" href="/contador/painel">
-      <span class="sistema-num">SISTEMA 03</span>
-      <h2>Contador por Câmera</h2>
-      <p>Painel das câmeras das células: a imagem de cada pallet ao vivo, contagem × takt, configuração remota da câmera (área, caixa, zoom) e análise/histórico. A câmera é ligada no próprio Cadenciador do tablet da célula.</p>
-      <div class="sistema-itens">
-        <span>IA no celular</span><span>Ao vivo</span><span>Real × takt</span><span>Evidência em foto</span>
-      </div>
-      <div class="sistema-rodape">
-        <span class="sistema-abrir">Abrir painel →</span>
-        <span class="sistema-stat" id="statCont">—</span>
-      </div>
-    </a>
-
     <a class="sistema" href="/progestao">
-      <span class="sistema-num">SISTEMA 04</span>
+      <span class="sistema-num">SISTEMA 03</span>
       <h2>ProGestão</h2>
       <p>Gestão do setor: ferramentas, EPIs, banco de horas, treinamentos, diário de bordo, checklist e planejamento de produção.</p>
       <div class="sistema-itens">
@@ -190,10 +177,6 @@
 
   API.get('/api/cadenciador/produtos')
     .then(p => { document.getElementById('statCad').textContent = `${p.length} produtos`; })
-    .catch(() => {});
-
-  API.get('/api/contador/linhas')
-    .then(l => { const on = l.filter(x => x.online).length; document.getElementById('statCont').textContent = on ? `${on} linha(s) ao vivo` : 'nenhuma linha ao vivo'; })
     .catch(() => {});
 
   API.get('/api/colaboradores?status=Ativo')

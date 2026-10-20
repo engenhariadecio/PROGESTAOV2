@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Contador — Painel — Décio</title>
+<title>Cadenciador — Painel das câmeras — Décio</title>
 <link rel="icon" href="/assets/logo-decio.png">
 <link rel="stylesheet" href="/css/decio.css">
 <style>
@@ -100,7 +100,7 @@ td img { width: 72px; height: 54px; object-fit: cover; border-radius: 6px; curso
   <!-- ═══ AO VIVO ═══ -->
   <section class="painel ativo" id="p-vivo">
     <div class="linhas" id="linhas"></div>
-    <div class="vazio" id="semLinhas" style="display:none">Nenhuma câmera de célula ainda.<br>No tablet da célula, abra o <b>Cadenciador</b>, escolha turno, célula, produto e "Câmera deste aparelho" e clique em <b>Iniciar linha</b> — a câmera aparece aqui. Ou clique em <b>＋ Câmera de célula</b> para criar e conectar um celular avulso.</div>
+    <div class="vazio" id="semLinhas" style="display:none">Nenhuma câmera de célula ainda.<br>No tablet da célula, abra o <b>Cadenciador</b>, escolha turno, célula e produto, clique em <b>Iniciar linha</b> e depois em <b>Conectar câmera</b> — ela aparece aqui.</div>
   </section>
 
   <!-- ═══ ANÁLISE ═══ -->
@@ -282,7 +282,7 @@ $('lSalvar').onclick = async () => {
   } catch (e) { avisoErro(e.message); }
 };
 async function removerLinha(id) { if (!confirm('Remover esta linha do contador? O histórico de contagens é mantido.')) return; try { await API.del('/api/contador/linhas/' + id); atualizarLinhas(); } catch (e) { avisoErro(e.message); } }
-function abrirQr(id) { $('qrImg').src = `/api/contador/linhas/${id}/qr.svg`; $('qrLink').textContent = `${location.origin}/contador?linha=${id}`; abrirModal('mQr'); }
+function abrirQr(id) { $('qrImg').src = `/api/contador/linhas/${id}/qr.svg`; $('qrLink').textContent = `${location.origin}/cadenciador/camera?linha=${id}`; abrirModal('mQr'); }
 async function abrirSessao(id) {
   const l = linhasCache.find(x => x.id === id); if (!l || !l.produto_id) return;
   try {
@@ -483,7 +483,7 @@ async function abrirAnalise(data, lid, sid) {
 }
 
 (async () => {
-  USU = await montarTopo({ subtitulo: 'Contador por câmera — painel' });
+  USU = await montarTopo({ subtitulo: 'Cadenciador — painel das câmeras' });
   if (ehAdmin()) $('btnNova').style.display = '';
   $('aData').value = hojeISO();
   await carregarCadastros(); await atualizarLinhas(); preencherLinhasAnalise(); carregarSessoesFiltro();

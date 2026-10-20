@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Câmera da linha — Décio</title>
+<title>Cadenciador — câmera da linha — Décio</title>
 <link rel="icon" href="/assets/logo-decio.png">
 <link rel="stylesheet" href="/css/decio.css">
 <style>
@@ -109,7 +109,7 @@ async function carregarSetup() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('avisoCam').style.display = 'block'; $('avisoCam').textContent = 'Este navegador não dá acesso à câmera. Use o Chrome, pelo endereço HTTPS do sistema.'; }
   const linhas = await API.get('/api/contador/linhas').catch(() => []);
   const el = $('listaLinhas');
-  if (!linhas.length) { el.innerHTML = '<div class="ajuda">Nenhuma célula com câmera. No Cadenciador, inicie a linha com a opção de câmera, ou crie no painel do Contador.</div>'; return; }
+  if (!linhas.length) { el.innerHTML = '<div class="ajuda">Nenhuma célula com linha iniciada. No tablet, abra o Cadenciador, escolha célula e produto e clique em Iniciar linha; depois volte aqui.</div>'; return; }
   const pedida = Number(new URLSearchParams(location.search).get('linha')) || Number(localStorage.getItem('contador.linha')) || 0;
   el.innerHTML = linhas.map(l => `<div class="linha-op${l.id === pedida ? ' sel' : ''}" data-id="${l.id}"><div><strong>${escapar(l.nome || l.celula)}</strong><br><small>${escapar(l.celula)}${l.produto_nome ? ' · ' + escapar(l.produto_nome) : ''}${l.sessao ? ' · takt ' + l.sessao.takt_min + ' min' : ' · sem cadenciador hoje'}</small></div>${l.online ? '<span class="selo selo-ok">câmera ligada</span>' : ''}</div>`).join('');
   el.querySelectorAll('.linha-op').forEach(op => op.onclick = () => { el.querySelectorAll('.linha-op').forEach(o => o.classList.remove('sel')); op.classList.add('sel'); linha = linhas.find(l => l.id === Number(op.dataset.id)); });
@@ -139,7 +139,7 @@ async function iniciar() {
     onSessao: () => atualizarPlacar(),
     onConfig: (cfg, zona) => { $('dica').style.display = zona ? 'none' : ''; $('info').innerHTML = `Sensibilidade ${cfg.sens}/10 · conta caixa colocada (+1) e retirada (−1)${cfg.caixa ? ' · tamanho da caixa marcado' : ' · aprende o tamanho da caixa sozinha'}`; },
     onOffline: off => $('offline').classList.toggle('on', off),
-    onEncerrar: () => location.href = '/contador'
+    onEncerrar: () => location.href = '/cadenciador/camera'
   });
   try { await cam.conectar({ linhaId: linha.id, produtoId: linha.produto_id }); }
   catch (e) { return avisoErro('Não foi possível conectar: ' + e.message); }
@@ -152,8 +152,8 @@ $('btnIniciar').onclick = iniciar;
 $('btnMais').onclick = () => cam.registrar('manual_mais');
 $('btnMenos').onclick = () => { if (cam.contagem > 0) cam.registrar('manual_menos'); };
 $('btnPallet').onclick = () => { cam.trocaPallet(); avisoOk('Referência zerada. Saia da frente do pallet por 2 s.'); };
-$('btnSair').onclick = () => { if (!confirm('Encerrar a câmera neste aparelho?')) return; cam.parar(); location.href = '/contador'; };
-(async () => { await montarTopo({ subtitulo: 'Câmera da linha' }); carregarSetup(); })();
+$('btnSair').onclick = () => { if (!confirm('Encerrar a câmera neste aparelho?')) return; cam.parar(); location.href = '/cadenciador/camera'; };
+(async () => { await montarTopo({ subtitulo: 'Cadenciador — câmera da linha' }); carregarSetup(); })();
 </script>
 </body>
 </html>

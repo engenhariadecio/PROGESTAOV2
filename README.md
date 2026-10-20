@@ -36,6 +36,11 @@ Os sistemas eram independentes e guardavam dados em lugares diferentes. Agora co
 - As consultas de aniversariantes usavam `HAVING` sem `GROUP BY`, o que o Postgres rejeita. Reescritas com subquery.
 - Layout retematizado com a identidade da Décio.
 
+**Contador dentro do Cadenciador (20/10/2026)**
+- Não existe mais "Contador" como sistema separado (saiu do portal e do menu). O fluxo é um só, no Cadenciador: **turno → célula → produto → Iniciar linha → Conectar câmera**. Depois de iniciar, o cartão *Câmera do pallet* oferece **📷 Usar a câmera deste aparelho** ou **📱 Conectar um celular (QR)**. Com um celular conectado, o tablet mostra a imagem dele, a contagem e os botões +1/−1 (comandos remotos). A escolha "este aparelho" fica lembrada para a próxima vez.
+- Endereços: `/cadenciador/painel` (painel das câmeras: ao vivo, configurar, análise, histórico — também no botão *Painel das câmeras*) e `/cadenciador/camera` (aparelho que filma; é o link do QR). Os antigos `/contador` e `/contador/painel` continuam funcionando.
+- Um aparelho que parou de transmitir deixa de mandar no produto/sessão da linha (o painel volta a seguir o que o tablet iniciou).
+
 **Câmera: colocada e retirada, sem calibrar caixa (20/10/2026)**
 - A detecção passou a trabalhar por **manchas de mudança** na área marcada (componentes conexos sobre a diferença de **cor** entre a cena e a referência — papelão sobre piso cinza tem o mesmo brilho, mas não a mesma cor). Cada mancha compacta é uma caixa; a câmera **aprende o tamanho típico sozinha** nas primeiras contagens (mediana), então marcar o tamanho da caixa virou opcional. Mancha do tamanho de 2 caixas conta 2.
 - **Retirada conta −1**: a cor da mancha é comparada com o modelo de fundo (faixa de cima da área na calibração — por isso a área deve ir até acima da pilha mais alta). Ficou parecida com o fundo → retirada (`ia_retirada`); senão → colocada (`ia`). Alguém que só parou na frente e saiu gera +1 e −1 (saldo zero); gente passando atrás ou na frente sem mexer não gera nada (a cena volta ao que era). A opção "várias por vez" e o estorno automático saíram (ficaram automáticos).

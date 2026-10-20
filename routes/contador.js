@@ -109,8 +109,9 @@ router.get('/linhas', requireAuth, async (req, res) => {
     const agora = Date.now();
     const porProduto = (await pool.query('SELECT linha_id, produto_id, config FROM cont_linha_produto')).rows;
     for (const l of linhas) {
-      const q = QUADROS.get(l.id);
-      if (q && q.produto_id && q.produto_id !== l.produto_id) l.produto_id = q.produto_id;   // o tablet trocou de produto
+      let q = QUADROS.get(l.id);
+      if (q && agora - q.ts >= VIVO_MS) q = { ...q, produto_id: null, sessao_id: null };   // aparelho offline: não manda mais no produto/sessão
+      if (q && q.produto_id && q.produto_id !== l.produto_id) l.produto_id = q.produto_id;   // o aparelho ligado trocou de produto
       const cp = porProduto.find(x => x.linha_id === l.id && x.produto_id === l.produto_id);
       l.config_linha = { ...CONFIG_PADRAO, ...(l.config || {}) };
       l.config_produto = cp ? cp.config : {};
@@ -239,7 +240,7 @@ router.get('/linhas/:id/estado', requireAuth, async (req, res) => {
 router.get('/linhas/:id/qr.svg', requireAuth, async (req, res) => {
   try {
     const origem = `${req.headers['x-forwarded-proto'] || req.protocol}://${req.headers.host}`;
-    const svg = await QRCode.toString(`${origem}/contador?linha=${Number(req.params.id)}`, { type: 'svg', margin: 1, width: 240 });
+    const svg = await QRCode.toString(`${origem}/cadenciador/camera?linha=${Number(req.params.id)}`, { type: 'svg', margin: 1, width: 240 });
     res.set({ 'Content-Type': 'image/svg+xml', 'Cache-Control': 'private, max-age=3600' }).send(svg);
   } catch (e) { res.status(500).end(); }
 });

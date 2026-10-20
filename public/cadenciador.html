@@ -113,6 +113,7 @@ tbody tr.agora td:first-child { box-shadow: inset 3px 0 0 var(--verde); }
 .btn-grande { font-size: 22px; padding: 14px; border-radius: 12px; font-weight: 800; }
 .cam-info { font-size: 12px; color: var(--t3); margin-top: 10px; line-height: 1.5; text-align: left; }
 .gr { position: relative; height: 300px; }
+#camRemota .hud { top: 36px; }
 </style>
 </head>
 <body>
@@ -138,13 +139,10 @@ tbody tr.agora td:first-child { box-shadow: inset 3px 0 0 var(--verde); }
       <label class="rotulo" for="inData">Data</label>
       <input class="controle" type="date" id="inData">
     </div>
-    <div class="campo">
-      <label class="rotulo" for="selCamera">Câmera do pallet</label>
-      <select class="controle" id="selCamera"><option value="">Sem câmera</option><option value="aqui">Câmera deste aparelho</option><option value="outro">Outro aparelho (celular avulso)</option></select>
-    </div>
     <div class="acoes">
       <button class="btn btn-primario" id="btnAbrir">Iniciar linha</button>
       <button class="btn btn-fantasma" id="btnChao" disabled>Painel de chão</button>
+      <a class="btn btn-fantasma" href="/cadenciador/painel">Painel das câmeras</a>
     </div>
   </div>
 
@@ -199,13 +197,36 @@ tbody tr.agora td:first-child { box-shadow: inset 3px 0 0 var(--verde); }
   <!-- Câmera do pallet (contador) -->
   <section class="cartao" id="cartaoCamera" style="display:none">
     <div class="cartao-topo">
-      <h2 class="cartao-titulo">Câmera do pallet — contagem</h2>
+      <h2 class="cartao-titulo">Câmera do pallet — contagem <span class="selo selo-neutro" id="camSelo">sem câmera</span></h2>
       <div class="linha-flex">
-        <a class="btn btn-fantasma btn-sm" href="/contador/painel" target="_blank">Painel / configurar pelo PC</a>
-        <button class="btn btn-fantasma btn-sm" id="btnCamParar">Desligar câmera</button>
+        <a class="btn btn-fantasma btn-sm" href="/cadenciador/painel" target="_blank">Painel das câmeras</a>
+        <button class="btn btn-fantasma btn-sm" id="btnCamParar" style="display:none">Desligar câmera</button>
       </div>
     </div>
-    <div class="cartao-corpo">
+    <!-- passo: conectar -->
+    <div class="cartao-corpo" id="camConectar">
+      <p class="ajuda" style="margin-bottom:12px">Linha iniciada. Agora conecte a câmera que vai olhar o pallet desta célula:</p>
+      <div class="linha-flex" style="gap:10px;flex-wrap:wrap">
+        <button class="btn btn-primario" id="btnCamAqui">📷 Usar a câmera deste aparelho</button>
+        <button class="btn btn-fantasma" id="btnCamQr">📱 Conectar um celular (QR)</button>
+      </div>
+      <div class="ajuda" style="margin-top:10px" id="camConectarInfo"></div>
+    </div>
+    <!-- câmera em outro aparelho: só acompanha -->
+    <div class="cartao-corpo" id="camRemota" style="display:none">
+      <div class="cam-grade">
+        <div><div class="palco"><img id="camRemotaImg" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"><div class="hud"><span class="selo-hud on" id="camRemotaSelo">● câmera em outro aparelho</span></div></div>
+          <div class="cam-info" id="camRemotaInfo">A área e a câmera são configuradas no painel das câmeras.</div></div>
+        <div class="cam-placar">
+          <div class="num-grande" id="camContagemR">0</div>
+          <div class="info-bloco" style="margin-top:6px"><div class="r">Produzido (câmera)</div></div>
+          <div class="comp"><div><b id="camEsperadoR">—</b><span>Esperado (takt)</span></div><div><b id="camDeltaR" class="delta">—</b><span>Diferença</span></div></div>
+          <div class="botoes"><button class="btn btn-ok btn-grande" id="camMaisR">+1</button><button class="btn btn-fantasma btn-grande" id="camMenosR">−1</button></div>
+          <div class="botoes"><button class="btn btn-fantasma btn-sm" id="btnCamQr2">📱 QR do celular</button><button class="btn btn-fantasma btn-sm" id="btnCamAqui2">📷 Usar este aparelho</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="cartao-corpo" id="camLocal" style="display:none">
       <div class="cam-grade">
         <div>
           <div class="palco">
@@ -267,6 +288,13 @@ tbody tr.agora td:first-child { box-shadow: inset 3px 0 0 var(--verde); }
     </div>
   </section>
 </main>
+
+<div class="modal-fundo" id="mQr"><div class="modal">
+  <div class="modal-topo"><div class="modal-titulo">Conectar um celular como câmera</div><button class="modal-fechar" onclick="fecharModal('mQr')">×</button></div>
+  <div class="modal-corpo" style="text-align:center">
+    <p class="ajuda" style="margin-bottom:12px">No celular, faça login no sistema, leia o QR (ou abra o endereço) e toque em <b>Conectar câmera</b>. A imagem aparece aqui e no painel; a área do pallet é marcada pelo painel ou no próprio celular.</p>
+    <img id="qrImg" alt="QR" style="width:240px;height:240px;background:#fff;border-radius:12px;padding:8px"><code id="qrLink" style="display:block;margin-top:10px;font-size:13px;word-break:break-all;background:var(--sup);padding:8px;border-radius:8px"></code>
+  </div></div></div>
 
 <!-- Painel de chão -->
 <div id="chao">
@@ -536,7 +564,7 @@ async function abrirSessao() {
   btn.disabled = true; btn.textContent = 'Carregando…';
 
   const s = await tentar(() => API.post('/api/cadenciador/sessoes', { turno_id, produto_id, data }));
-  if (s) { aplicarSessao(s); manterTelaLigada(); await iniciarCamera(s); }
+  if (s) { aplicarSessao(s); manterTelaLigada(); await iniciarCamera(s); if (!$c('selCelula').value) avisoOk('Para contar com câmera, escolha a célula antes de iniciar.'); }
 
   btn.disabled = false; btn.textContent = 'Iniciar linha';
 }
@@ -547,50 +575,78 @@ const $c = id => document.getElementById(id);
 function atualizarPlacarCam() {
   const c = CAM ? CAM.contagem : eventosRemotos.reduce((s, e) => s + e.valor, 0);
   const evs = CAM ? CAM.eventos : eventosRemotos;
-  $c('camContagem').textContent = c; $c('chaoCam').textContent = c;
+  $c('camContagem').textContent = c; $c('camContagemR').textContent = c; $c('chaoCam').textContent = c;
   const agora = agoraHMS();
   const esperado = SESSAO ? SESSAO.ciclos.filter(x => offsetNoTurno(x.hora_prevista, SESSAO) <= offsetNoTurno(agora, SESSAO) && dentroDoTurno(agora, SESSAO)).length : 0;
   const d = c - esperado;
-  $c('camEsperado').textContent = esperado;
+  $c('camEsperado').textContent = esperado; $c('camEsperadoR').textContent = esperado;
   $c('camDelta').textContent = (d > 0 ? '+' : '') + d; $c('camDelta').className = 'delta ' + (d >= 0 ? 'ok' : 'ruim');
+  $c('camDeltaR').textContent = $c('camDelta').textContent; $c('camDeltaR').className = $c('camDelta').className;
   const saidas = evs.filter(e => e.valor > 0).map(e => new Date(e.ts)).sort((a, b) => a - b);
   if (SESSAO && saidas.length >= 2) { const int = (saidas[saidas.length - 1] - saidas[saidas.length - 2]) / 60000; $c('camRitmo').innerHTML = `Última saída: <strong>${int.toFixed(1)} min</strong> · takt ${SESSAO.takt_min} min ${int <= SESSAO.takt_min * 1.05 ? '<span style="color:var(--ok)">✓ no ritmo</span>' : '<span style="color:var(--erro)">⚠ ' + Math.round((int / SESSAO.takt_min - 1) * 100) + '% acima</span>'}`; }
   else $c('camRitmo').textContent = SESSAO ? 'Takt ' + SESSAO.takt_min + ' min · aguardando as primeiras saídas' : '';
   renderGrafico(evs);
 }
+/* Linha iniciada: registra a câmera da célula no servidor (o painel e um celular avulso seguem o produto)
+   e mostra o passo "conectar câmera". Se já houver câmera (este aparelho ou outro), segue com ela. */
 async function iniciarCamera(s) {
-  const modo = $c('selCamera').value, celula = $c('selCelula').value;
-  if (!modo) { if (CAM) { CAM.parar(); CAM = null; } $c('cartaoCamera').style.display = 'none'; $c('chaoCamCaixa').style.display = 'none'; $c('chaoCamCaixa').parentElement.classList.remove('com-camera'); $c('cartaoGrafico').style.display = ''; LINHA_CAM = null; renderGrafico([]); return; }
-  if (!celula) { avisoErro('Para usar a câmera, escolha a célula.'); return; }
-  // garante a câmera da célula no servidor e registra o produto em linha (o painel e um celular avulso seguem isso)
+  const celula = $c('selCelula').value;
+  if (!celula) { $c('cartaoCamera').style.display = 'none'; $c('chaoCamCaixa').style.display = 'none'; LINHA_CAM = null; if (CAM) { CAM.parar(); CAM = null; } return; }
   LINHA_CAM = await tentar(() => API.post('/api/contador/linhas', { celula, produto_id: s.produto_id }));
   if (!LINHA_CAM) return;
-  $c('cartaoGrafico').style.display = ''; $c('chaoCamCaixa').style.display = ''; $c('chaoCamCaixa').parentElement.classList.add('com-camera');
-  if (modo === 'outro') {   // câmera num celular avulso: só acompanha
-    if (CAM) { CAM.parar(); CAM = null; }
-    $c('cartaoCamera').style.display = 'none';
-    await carregarEventosRemotos(); return;
-  }
-  $c('cartaoCamera').style.display = '';
+  $c('cartaoCamera').style.display = ''; $c('chaoCamCaixa').style.display = '';
   if (CAM && CAM.ativo) { await CAM.trocarSessao(s.produto_id, s.id); atualizarPlacarCam(); return; }
+  mostrarPassoCam('conectar');
+  await verificarCamRemota();
+  if (localStorage.getItem('cad.camera') === 'aqui' && !camRemotaOnline) conectarCamAqui();   // da última vez usou este aparelho
+}
+let camRemotaOnline = false;
+function mostrarPassoCam(qual) {
+  ['camConectar', 'camRemota', 'camLocal'].forEach(id => $c(id).style.display = id === 'cam' + qual.charAt(0).toUpperCase() + qual.slice(1) ? '' : 'none');
+  $c('btnCamParar').style.display = qual === 'local' ? '' : 'none';
+  $c('camSelo').textContent = qual === 'local' ? 'câmera deste aparelho' : qual === 'remota' ? 'câmera em outro aparelho' : 'sem câmera';
+  $c('camSelo').className = 'selo ' + (qual === 'conectar' ? 'selo-neutro' : 'selo-ok');
+}
+async function verificarCamRemota() {
+  if (!LINHA_CAM || (CAM && CAM.ativo)) return;
+  const linhas = await API.get('/api/contador/linhas').catch(() => []);
+  const l = linhas.find(x => x.id === LINHA_CAM.id);
+  camRemotaOnline = !!(l && l.online);
+  if (camRemotaOnline) {
+    if ($c('camRemota').style.display === 'none') mostrarPassoCam('remota');
+    const img = $c('camRemotaImg'); if (img.dataset.ts !== String(l.frame_ts)) { img.dataset.ts = l.frame_ts; img.src = `/api/contador/frame/${l.id}?t=${l.frame_ts}`; }
+    $c('camRemotaInfo').textContent = `${l.usuario || ''} · ${l.dispositivo || ''} · ${l.config.zona ? 'área marcada' : 'sem área marcada — marque no painel ou no celular'}`;
+    await carregarEventosRemotos();
+  } else if ($c('camRemota').style.display !== 'none') { mostrarPassoCam('conectar'); $c('camConectarInfo').textContent = 'O celular parou de transmitir.'; }
+}
+function abrirQrCam() { if (!LINHA_CAM) return; $c('qrImg').src = `/api/contador/linhas/${LINHA_CAM.id}/qr.svg`; $c('qrLink').textContent = `${location.origin}/cadenciador/camera?linha=${LINHA_CAM.id}`; abrirModal('mQr'); }
+async function conectarCamAqui() {
+  const s = SESSAO; if (!s || !LINHA_CAM) return;
+  mostrarPassoCam('local');
   CAM = ContadorCam.criar({
     video: $c('camVideo'), canvas: $c('camSobre'), flash: $c('camFlash'), desenhoLocal: true,
     hud: { ia: $c('camHudIa'), estado: $c('camHudEstado'), live: $c('camHudLive') },
     onContagem: () => atualizarPlacarCam(),
     onSessao: () => atualizarPlacarCam(),
     onConfig: (cfg, zona) => { $c('camDica').style.display = zona ? 'none' : ''; $c('camMult').checked = !!cfg.multiplas; $c('camInfo').innerHTML = `Sensibilidade ${cfg.sens}/10 · conta caixa colocada (+1) e retirada (−1)${cfg.caixa ? ' · tamanho da caixa marcado para este produto' : ' · aprende o tamanho da caixa sozinha'} · zoom e câmera ajustam-se pelo painel no PC`; },
-    onEncerrar: () => { $c('cartaoCamera').style.display = 'none'; CAM = null; }
+    onEncerrar: () => { CAM = null; mostrarPassoCam('conectar'); }
   });
   try { await CAM.conectar({ linhaId: LINHA_CAM.id, produtoId: s.produto_id, sessaoId: s.id }); }
-  catch (e) { avisoErro('Câmera: ' + e.message); CAM = null; $c('cartaoCamera').style.display = 'none'; return; }
+  catch (e) { avisoErro('Câmera: ' + e.message); CAM = null; mostrarPassoCam('conectar'); return; }
+  localStorage.setItem('cad.camera', 'aqui');
   atualizarPlacarCam();
 }
+$c('btnCamAqui').onclick = conectarCamAqui; $c('btnCamAqui2').onclick = conectarCamAqui;
+$c('btnCamQr').onclick = abrirQrCam; $c('btnCamQr2').onclick = abrirQrCam;
+$c('camMaisR').onclick = () => LINHA_CAM && API.post(`/api/contador/linhas/${LINHA_CAM.id}/comando`, { tipo: 'mais' }).catch(e => avisoErro(e.message));
+$c('camMenosR').onclick = () => LINHA_CAM && API.post(`/api/contador/linhas/${LINHA_CAM.id}/comando`, { tipo: 'menos' }).catch(e => avisoErro(e.message));
 async function carregarEventosRemotos() {
   if (!LINHA_CAM || !SESSAO) return;
   eventosRemotos = await API.get(`/api/contador/eventos?data=${hojeISO()}&linha_id=${LINHA_CAM.id}&sessao_id=${SESSAO.id}`).catch(() => []);
   atualizarPlacarCam();
 }
-setInterval(() => { if (LINHA_CAM && !CAM) carregarEventosRemotos(); else if (SESSAO) atualizarPlacarCam(); }, 5000);
+setInterval(() => { if (SESSAO) atualizarPlacarCam(); }, 5000);
+setInterval(() => { if (LINHA_CAM && !(CAM && CAM.ativo)) verificarCamRemota(); }, 2000);
 
 document.querySelectorAll('#cartaoCamera .modo [data-modo]').forEach(b => b.onclick = () => { document.querySelectorAll('#cartaoCamera .modo [data-modo]').forEach(x => x.classList.toggle('sel', x === b)); if (CAM) CAM.modoDesenho(b.dataset.modo); $c('camDica').style.display = ''; $c('camDica').textContent = b.dataset.modo === 'zona' ? 'Arraste na imagem para marcar a área do pallet (toda a altura das pilhas).' : 'Arraste em volta de uma caixa inteira deste produto.'; });
 $c('camMult').onchange = e => { if (CAM) CAM.salvarConfig({ multiplas: e.target.checked }, true); };
@@ -598,7 +654,7 @@ $c('camMais').onclick = () => CAM && CAM.registrar('manual_mais');
 $c('camMenos').onclick = () => { if (CAM && CAM.contagem > 0) CAM.registrar('manual_menos'); };
 $c('camPallet').onclick = () => { if (CAM) { CAM.trocaPallet(); avisoOk('Referência zerada. Saia da frente do pallet por 2 s.'); } };
 $c('camRecal').onclick = () => { if (CAM) { CAM.recalibrar(); avisoOk('Recalibrando.'); } };
-$c('btnCamParar').onclick = () => { if (CAM) { CAM.parar(); CAM = null; } $c('cartaoCamera').style.display = 'none'; $c('selCamera').value = ''; };
+$c('btnCamParar').onclick = () => { if (CAM) { CAM.parar(); CAM = null; } localStorage.removeItem('cad.camera'); mostrarPassoCam('conectar'); };
 
 /* ═══════════ Gráfico takt × produzido ═══════════ */
 function renderGrafico(evs) {
@@ -674,7 +730,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && chao.class
 /* Ao trocar de turno, o takt do produto pode mudar */
 document.getElementById('selTurno').onchange = () => carregarProdutos();
 document.getElementById('selCelula').onchange = () => { localStorage.setItem('cad.celula', document.getElementById('selCelula').value); carregarProdutos(); };
-document.getElementById('selCamera').onchange = () => localStorage.setItem('cad.camera', document.getElementById('selCamera').value);
+
 
 async function carregarProdutos() {
   const turnoId = document.getElementById('selTurno').value;
@@ -720,8 +776,7 @@ async function carregarProdutos() {
   const selCel = document.getElementById('selCelula');
   selCel.innerHTML = '<option value="">Todas</option>' + CELULAS.filter(c => c.ativa !== false).map(c => `<option value="${escapar(c.nome)}">${escapar(c.nome)}</option>`).join('');
   const celSalva = localStorage.getItem('cad.celula'); if (celSalva && CELULAS.some(c => c.nome === celSalva)) selCel.value = celSalva;
-  const camSalva = localStorage.getItem('cad.camera'); if (camSalva) document.getElementById('selCamera').value = camSalva;
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) document.querySelector('#selCamera option[value="aqui"]').disabled = true;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { document.getElementById('btnCamAqui').disabled = true; document.getElementById('camConectarInfo').textContent = 'Este navegador não dá acesso à câmera (precisa de HTTPS). Conecte um celular pelo QR.'; }
 
   await carregarProdutos();
   setInterval(tique, 1000);

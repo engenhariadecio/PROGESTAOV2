@@ -145,7 +145,6 @@ const MENU = [
   { href: '/',             rotulo: 'Portal' },
   { href: '/ponto',        rotulo: 'Ponto NFC' },
   { href: '/cadenciador',  rotulo: 'Cadenciador' },
-  { href: '/contador',     rotulo: 'Contador' },
   { href: '/progestao',    rotulo: 'ProGestão' }
 ];
 
