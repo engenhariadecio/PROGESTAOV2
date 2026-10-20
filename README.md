@@ -1,0 +1,255 @@
+# Décio — Sistema Integrado da Montagem
+
+Um único aplicativo, um único banco Postgres e um único login para os três sistemas do setor:
+
+| # | Sistema | Rota | O que faz |
+|---|---------|------|-----------|
+| 01 | **Ponto NFC** | `/ponto` | Batida por crachá NFC ou seleção manual, com turno identificado automaticamente |
+| 02 | **Cadenciador de Produção** | `/cadenciador` | Cadência por takt time, avisos de voz, parada de linha e painel de chão de fábrica |
+| 03 | **ProGestão** | `/progestao` | Ferramentas, EPIs, banco de horas, treinamentos, diário de bordo, checklist e produção |
+
+Tudo é configurado em um lugar só: **`/admin`** (Painel de Administração).
+
+---
+
+## O que mudou em relação aos três projetos originais
+
+Os sistemas eram independentes e guardavam dados em lugares diferentes. Agora compartilham banco, login e turnos.
+
+**Ponto NFC**
+- Os 18 crachás deixaram de ser uma constante `COLLABORATOR_MAP` dentro do HTML e viraram cadastro no banco.
+- Os registros saíram do `localStorage` do celular e vão para o Postgres — não se perdem ao limpar o navegador.
+- A senha de administrador `"1234"` no código-fonte foi substituída pelo login com sessão e perfis.
+- Cada batida grava o turno em que ocorreu e alterna entre entrada e saída.
+
+**Cadenciador de Produção**
+- Os 69 produtos e seus takt times saíram do array `PRODUTOS_PADRAO` e viraram cadastro editável.
+- O turno deixou de ser fixo em `06:00–17:30`: agora vem do cadastro, e o takt pode ser diferente por turno.
+- Os intervalos (café, almoço) são cadastráveis, com a frase do aviso de voz.
+- Ciclos, observações e paradas de linha são gravados no banco — o relatório sobrevive a um F5.
+- A senha `"producao2025"` no código foi substituída pelo login.
+- O cálculo dos ciclos foi reescrito, mas produz **exatamente os mesmos horários** do algoritmo original (verificado nos 69 takts reais). A diferença é que passou a funcionar em turnos que viram a meia-noite.
+
+**ProGestão**
+- **Correções necessárias:** o `db.js` antigo criava tabelas com colunas que nenhuma rota usava (`colaboradores.matricula` vs `mat`, `ferramentas.codigo` vs `cod`, e assim por diante). O sistema quebrava no primeiro cadastro. O schema foi reescrito a partir das rotas reais.
+- `GET /api/ferramentas/checklist` era capturado pela rota `/:id` e virava `WHERE id = 'checklist'`. Rota reordenada.
+- As consultas de aniversariantes usavam `HAVING` sem `GROUP BY`, o que o Postgres rejeita. Reescritas com subquery.
+- Layout retematizado com a identidade da Décio.
+
+**Contador por câmera (20/10/2026)** — `/contador` (celular) e `/contador/painel` (qualquer dispositivo)
+- Um celular fixo apontado para o pallet conta cada produto que sai da linha. A IA (MediaPipe Pose, rodando no próprio celular, sem nuvem — arquivos em `public/js/mediapipe/pose/`) detecta a pessoa; quando ela sai da frente da área marcada, a página compara a área com a referência: mudou → **+1** (com foto de evidência), mudou quase tudo → **troca de pallet** (não conta), não mudou → nada. Uma etapa de confirmação (~3 s) evita contar quem só parou em frente ao pallet, e a câmera estorna sozinha se a área voltar a ficar como antes da contagem. Botões **+1/−1** para corrigir, sensibilidade ajustável, tela sempre ligada e fila offline (as contagens sobem quando a rede volta).
+- Setup no celular: escolher a **célula** e a **sessão do cadenciador** do dia (ou "só contar"), abrir a câmera traseira e arrastar na imagem para marcar a área do pallet (fica salva no celular por célula). Várias linhas ao mesmo tempo: um celular por linha.
+- **Painel ao vivo**: imagem de todas as linhas transmitindo (o celular envia um quadro JPEG a cada ~0,7 s; o servidor guarda só o último em memória, nada de vídeo no banco), contagem × esperado pelo takt, diferença, estado. Clique para ampliar.
+- **Análise × takt** por dia/célula/sessão: acumulado esperado (grade do cadenciador) × real, intervalo entre saídas × takt (vermelho = acima do takt), produção por hora, KPIs (ritmo real, intervalo médio, saídas acima do takt), lista de eventos com foto e exclusão. **Histórico** por dia/linha com % de atendimento. Exportar Excel (`/api/export/contador`).
+- Tabela `cont_eventos`; rotas `/api/contador/*`. O perfil PCP vê o painel (somente leitura). Datas/horas calculadas no fuso do Node (`TZ`), não no do Postgres.
+- Recomendações: o navegador só libera a câmera em **HTTPS** (Railway já é) ou em `localhost`; suporte fixo + carregador no celular; a área marcada deve cobrir só o lugar onde a caixa é colocada; iluminação estável. Expectativa de 90–95 % de acerto — conferir pelo painel na primeira semana e corrigir com +1/−1.
+
+**Dashboards de Produção, células com operadores, mostrar senha (08/10/2026)**
+- Login: ícone de olho para mostrar/ocultar a senha.
+- Produção › Dashboard refeito. Seletor de dashboard + filtros de período (este mês, mês passado, 30/90 dias, ano, mês, intervalo), material, categoria, OP, célula e turno — independentes do filtro de mês do topo.
+  - **Meta × Realizado** (base: plano mensal): linha do plano (valores exatos do Plano Mensal: na data de cada plano a linha sobe a meta dele, fechando na meta total) × linha do atendimento (realizado desses planos acumulado pelo dia dos apontamentos, fechando no realizado total do Plano Mensal);  linha do atendimento (realizado acumulado dos apontamentos); meta × realizado por material; % de atendimento por OP; situação dos planos; produção por dia × meta diária.
+  - **Horas produzidas × Horas disponíveis** (base: apontamento diário, por célula): horas disponíveis = operadores × horas por operador (padrão 7 h) × dias úteis do período; produzidas = horas reportadas nos apontamentos. Gráfico por célula, por dia, eficiência, participação e tabela-resumo.
+- Nova aba **Células** em Produção: nome, categoria, **turno** (1º/2º/3º ou todos), operadores, horas por operador, descrição, ativa/inativa. Escolher a célula no apontamento preenche o turno dela; o filtro de turno do dashboard de horas considera o turno da célula. O select de célula do apontamento vem desse cadastro (as opções fixas foram removidas). Mesma tabela `celulas` da administração (colunas novas `categoria`, `operadores`, `horas_operador`). Rotas `/api/prod-celulas`.
+- Chart.js passou a ser servido localmente (`public/js/chart.umd.js`), sem depender de CDN.
+
+**Observações do status do plano (02/10/2026)**
+- Em Produção › Plano Mensal e Histórico, ao lado do status de cada plano há um balão 💬 (com a contagem). Abre uma janela com o histórico de observações: quem escreveu, quando e qual era o status na hora.
+- Administrador e Operação registram novas observações; o PCP só visualiza (o servidor devolve 403 em qualquer gravação). Excluir: só o administrador ou o autor.
+- Tabela `prod_plano_obs`; rotas `GET/POST /api/prod-planos/:id/observacoes` e `DELETE /api/prod-plano-obs/:id`.
+
+**Perfil PCP (02/10/2026)**
+- Novo perfil de usuário **PCP** (Administração → Usuários → Perfil): só visualiza ProGestão › Produção. Entra direto em `/progestao/producao`; a tela esconde os formulários, botões de editar/excluir, a aba de apontamento e o menu dos outros módulos.
+- A restrição é no servidor (`middleware/auth.js › restringirPcp`): qualquer outra página redireciona para Produção e qualquer API fora de leitura de Produção responde 403, mesmo chamando direto.
+
+**Banco de horas: compensação e filtro global · Produção: editar apontamento (28/09/2026)**
+- Banco de Horas tem o tipo **Desconto**: horas descontadas ficam registradas, mas **não entram no saldo** — assim como Justificado (atestado/declaração). Saldo = Crédito − Débito. KPIs "Desconto" e "Saldo (créd − déb)". (Lançamentos antigos gravados como "Compensação" são convertidos para "Desconto" no boot.)
+- Filtro no topo da página (período: hoje, esta semana, este mês, mês, semana, intervalo; colaborador; turno; tipo) que vale para os KPIs, a tabela de lançamentos e o saldo. Abre em "este mês".
+- Produção → Apontamento Diário: botão ✏️ na lista carrega o apontamento no formulário para edição. `PUT /api/prod-apontamentos-detalhados/:id` recalcula o realizado do plano (tira da OP antiga, soma na nova).
+
+**Advertências (24/09/2026)** — aba nova em Treinamentos
+- Registro por colaborador com tipo (Verbal, Escrita, Suspensão com dias), data, motivo, descrição dos fatos, quem aplicou (em branco = usuário logado), testemunhas, se o colaborador assinou ou recusou, e fotos do documento assinado.
+- Ao escolher o colaborador, o formulário mostra quantas advertências ele já tem. O histórico numera (1ª, 2ª, 3ª...) e filtra por colaborador, tipo e mês; detalhe em modal; Excel em `/api/export/advertencias`.
+- Tabela `tr_advertencias` guarda uma cópia do nome do colaborador para o registro sobreviver à exclusão do cadastro.
+
+**Desligados fora de todas as listas (24/09/2026)**
+- Regra única em todos os módulos: cada tela carrega a lista de colaboradores **sem os desligados** (`colabs`) e guarda a completa (`colabsTodos`) só para exibir o nome em registros antigos. Vale para selects de lançamento, checking de EPIs, saldo do banco de horas, sugestões do diário, aba Colaboradores de ferramentas, responsável/filtros de limpeza e vínculo de crachá na administração.
+- Ao editar um registro de quem já foi desligado (lançamento, convite, agendamento, crachá), o nome dele continua na lista, marcado "(desligado)", para não perder o vínculo.
+
+**Módulo Limpeza (23/09/2026)** — `/progestao/limpeza`
+- **Itens** com local, frequência (a cada N dias/semanas/meses), antecedência do aviso, responsável padrão, descrição e fotos. A próxima limpeza é a última feita + frequência (ou a data de início, se nunca foi feita).
+- **Alertas**: itens agrupados em Vencidos / Vencem hoje / A vencer / Em dia, com "Registrar limpeza" (quem, data, hora, obs) e "Agendar" direto no card.
+- **Agenda**: por dia, com colaborador e turno. "Gerar agenda" cria os agendamentos de todos os itens pela frequência até uma data (pulando fins de semana, sem duplicar). Dar baixa num agendamento vira registro no histórico; registrar pelo item dá baixa no agendamento aberto mais próximo.
+- **Histórico** filtrável por item, colaborador e mês, com Excel (`/api/export/limpeza`).
+- Tabelas `lp_itens` e `lp_agenda` (agendado/feito na mesma tabela); rotas em `routes/limpeza.js`.
+
+**Desligamento, EPI descartável, seed (22/09/2026)**
+- Colaborador tem o status **Desligado** com data (Administração → Colaboradores → Editar). Some das listas de lançamento (banco de horas, EPIs, ferramentas, treinamentos, diário), mas todo o histórico continua. Na lista da administração ficam ocultos por padrão; há um "Mostrar desligados".
+- `seed.js` só cria os colaboradores e crachás padrão no **primeiro boot** (banco sem colaboradores). Antes rodava a cada deploy e recriava, como Ativo, qualquer montador padrão que tivesse sido excluído.
+- EPI **descartável** (checkbox no cadastro): quando a validade passa, a entrega vira "Descartado" em vez de "Vencido" e não gera alerta. EPIs já cadastrados com "descart" no nome foram marcados automaticamente uma única vez.
+
+**Banco de horas e EPIs (22/09/2026)**
+- Banco de Horas tem o tipo **Justificado** (atestado, declaração): fica registrado com os minutos, aparece nos KPIs, no saldo por colaborador e no histórico, mas não soma nem desconta do saldo. A API só aceita Crédito, Débito ou Justificado.
+- EPIs: quando um colaborador recebe uma nova entrega do mesmo EPI, a entrega anterior passa a **Substituído** e sai dos alertas, dos vencidos e dos KPIs. Vale para qualquer entrega anterior, vencida ou não. A regra é calculada na tela a partir das datas, então funciona também para entregas antigas.
+- Entregas → Motivo: opção **Esqueceu**.
+
+**Checklist de ferramentas e filtro do banco de horas (11/09/2026)**
+- A aba *Checklist* em Ferramentas virou uma conferência com histórico: cada ferramenta recebe OK / Com problema / Não encontrada, com observação, e o botão **Salvar conferência** grava tudo com data, hora, turno e responsável (tabelas `ferr_checklists` e `ferr_checklist_itens`). O que foi marcado fica guardado no aparelho até salvar, então um F5 não perde nada. A versão anterior nunca gravou: a tela e a API usavam formatos diferentes.
+- Cada item guarda uma cópia do código, nome e status da ferramenta naquele momento — renomear ou excluir a ferramenta depois não altera o histórico.
+- Exportação em *Relatórios → Conferências* (Excel com duas abas: conferências e itens).
+- Banco de Horas → Lançamentos: filtros por colaborador, tipo e mês, com o saldo do que está filtrado.
+
+**Fotos nos cadastros (setembro/2026)**
+- Todos os cadastros do ProGestão aceitam fotos: ferramentas, EPIs, treinamentos, atividades do checklist e produtos. No Diário de Bordo, tanto ocorrências/pendências quanto resumos do turno.
+- As imagens são reduzidas no navegador antes do envio (lado maior 1600 px, JPEG). Uma foto de celular de 5 MB vira ~300 KB; a localização GPS gravada na foto é descartada.
+- No celular há o botão **Tirar foto**, que abre a câmera. No computador dá para arrastar ou colar com Ctrl+V.
+- As fotos ficam na tabela `fotos`, uma linha por imagem, com miniatura. As listagens só baixam a miniatura; a foto inteira só quando alguém abre o visualizador.
+- Fotos antigas (base64 nas colunas `epis.foto`, `ferramentas.foto`, `db_registros.foto/fotos`) são migradas automaticamente no primeiro boot.
+- Excluir um cadastro apaga as fotos dele (gatilho no banco).
+- Limites: 20 fotos por registro, 5 MB por foto depois de comprimida. Só JPG, PNG, WEBP e GIF — o servidor confere o conteúdo do arquivo, não a extensão.
+- Também foi corrigido o cadastro de ferramentas, que não gravava: a tela enviava `codigo`/`categoria`/`localizacao` e a API só aceitava `cod`/`cat`/`loc`. Empréstimos e manutenções tinham o mesmo problema. A API agora aceita e devolve os dois nomes.
+
+---
+
+## Subir no GitHub
+
+```bash
+cd decio-sistema-integrado
+git init
+git add .
+git commit -m "Sistema Integrado da Montagem"
+git branch -M main
+git remote add origin https://github.com/SEU-USUARIO/decio-sistema-integrado.git
+git push -u origin main
+```
+
+O `.gitignore` já exclui `node_modules/` e `.env`. **Nunca faça commit do `.env`.**
+
+---
+
+## Publicar no Railway
+
+**1. Criar o projeto**
+
+No [railway.app](https://railway.app): *New Project* → *Deploy from GitHub repo* → escolha o repositório.
+
+**2. Adicionar o Postgres**
+
+No mesmo projeto: *New* → *Database* → *Add PostgreSQL*.
+
+**3. Configurar as variáveis**
+
+No serviço do app, aba *Variables*:
+
+| Variável | Valor |
+|---|---|
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` ← referência ao banco, digite exatamente assim |
+| `NODE_ENV` | `production` |
+| `SESSION_SECRET` | uma string longa e aleatória (veja abaixo) |
+| `ADMIN_USER` | `admin` |
+| `ADMIN_PASS` | a senha inicial do administrador |
+| `ADMIN_NOME` | `Administrador` |
+| `TZ` | `America/Sao_Paulo` |
+| `SEED_ON_BOOT` | `true` |
+
+Para gerar o `SESSION_SECRET`:
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+```
+
+`PORT` é injetada pelo Railway — não crie essa variável.
+
+**4. Publicar**
+
+O Railway detecta o `package.json` e roda `npm start`. No primeiro boot o app:
+1. cria todas as tabelas (`db/schema.js`);
+2. aplica migrações defensivas, se o banco já existia;
+3. popula turnos, células, os 18 crachás, os 69 produtos e o usuário administrador (`db/seed.js`).
+
+Depois vá em *Settings* → *Networking* → *Generate Domain*.
+
+**5. Primeiro acesso**
+
+Entre com `ADMIN_USER` / `ADMIN_PASS` e **troque a senha imediatamente** em *Administração → Usuários → Trocar senha*.
+
+---
+
+## Rodar na sua máquina
+
+```bash
+npm install
+cp .env.example .env      # edite o DATABASE_URL
+npm run dev
+```
+
+Acesse `http://localhost:3000`.
+
+Para recriar tabelas e dados iniciais sem subir o servidor:
+```bash
+npm run db:seed
+```
+
+---
+
+## Turnos: o eixo que liga os três sistemas
+
+Um turno tem código, nome, hora de início, hora de fim, tolerância e uma lista de intervalos.
+
+- **Ponto NFC** — descobre o turno pelo horário da batida. A *tolerância* é a margem, em minutos, para uma batida um pouco antes do início ainda contar naquele turno. Batida fora de qualquer turno ativo é registrada e sinalizada, não bloqueada.
+- **Cadenciador** — calcula os ciclos entre o início e o fim do turno, pulando os intervalos. Se um turno rodar com equipe reduzida, cadastre um takt específico para ele em *Administração → Takt Times → Escopo: somente Turno X*.
+- **ProGestão** — usa o turno do colaborador e nos apontamentos de produção.
+
+Turnos que viram a meia-noite (ex.: `22:00 → 06:00`) precisam da opção **"Este turno vira a meia-noite"** marcada.
+
+O seed cria o Turno 1 (`06:00–17:30`, com os três intervalos originais) ativo, e os Turnos 2 e 3 desativados como ponto de partida.
+
+---
+
+## Leitura NFC
+
+A Web NFC API funciona no **Chrome para Android**, em conexão **HTTPS** (o domínio do Railway já é HTTPS). Em desktop e iOS o leitor não está disponível — a tela cai automaticamente para a batida manual, que pode ser desligada em *Administração → Parâmetros*.
+
+O UID cadastrado precisa ser exatamente o que o aparelho lê. Se um crachá novo não for reconhecido, a tela mostra o UID lido na mensagem de erro: copie e cadastre em *Administração → Crachás NFC*.
+
+---
+
+## Estrutura
+
+```
+├── server.js                 Express: sessão, rotas, boot
+├── db/
+│   ├── index.js              pool do Postgres
+│   ├── schema.js             schema completo + migrações idempotentes
+│   └── seed.js               turnos, crachás, produtos, admin
+├── lib/turnos.js             cálculo de ciclos e detecção de turno
+├── lib/fotos.js              entidades que aceitam fotos, validação, migração
+├── middleware/auth.js        requireAuth / requireAdmin
+├── routes/                   16 arquivos de API (inclui limpeza.js e fotos.js)
+└── public/                  (contador.html e contador-painel.html: módulo Contador; js/mediapipe/pose: IA local)
+    ├── css/decio.css         design system da marca
+    ├── js/core.js            API, avisos, cabeçalho, voz
+    ├── js/fotos.js           upload com compressão, galeria e visualizador
+    ├── login.html  index.html  admin.html
+    ├── ponto.html  cadenciador.html
+    └── progestao/            dashboard + 7 módulos
+```
+
+---
+
+## Perfis de acesso
+
+- **Administrador** — configura turnos, células, colaboradores, crachás, takt times, produtos, usuários e parâmetros.
+- **Operação** — usa os três sistemas, cadastra colaboradores e lança dados, mas não altera a estrutura.
+
+---
+
+## Backup
+
+O Railway faz snapshots do Postgres. Para um dump manual:
+
+```bash
+pg_dump "$DATABASE_URL" > backup_$(date +%F).sql
+```
+
+As fotos estão dentro do banco (tabela `fotos`), então o dump já as inclui.
+
+Cada módulo também exporta Excel: `/api/export/ponto`, `/api/export/crachas`, `/api/export/takt`, `/api/export/ciclos`, `/api/export/paradas`, `/api/export/colaboradores`, `/api/export/ferramentas`, `/api/export/epis`, e assim por diante.

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contador — Painel ao vivo — Décio</title>
+<link rel="icon" href="/assets/logo-decio.png">
+<link rel="stylesheet" href="/css/decio.css">
+<style>
+.conteudo { max-width: 1400px; }
+.abas { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+.aba { border: 1px solid var(--linha); background: var(--card); color: var(--t2); padding: 8px 16px; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 13px; }
+.aba.ativa { background: var(--verde); color: #fff; border-color: var(--verde); }
+.aba .n { background: rgba(255,255,255,.2); border-radius: 99px; padding: 1px 7px; font-size: 11px; margin-left: 6px; }
+.painel { display: none; } .painel.ativo { display: block; }
+.barra { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-bottom: 16px; }
+.barra .campo { display: grid; gap: 4px; }
+.barra .rotulo { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--t3); font-weight: 700; }
+.barra select, .barra input { min-width: 150px; }
+
+/* ao vivo */
+.linhas { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.linha { background: var(--card); border: 1px solid var(--linha); border-radius: 16px; overflow: hidden; }
+.linha .tela { position: relative; background: #0b1620; aspect-ratio: 4/3; cursor: zoom-in; }
+.linha .tela img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.linha .tela .off { position: absolute; inset: 0; display: grid; place-items: center; color: #8aa0b0; font-size: 13px; text-align: center; padding: 20px; background: rgba(11,22,32,.85); }
+.linha .tela .vivo { position: absolute; top: 8px; right: 8px; font-size: 10.5px; font-weight: 800; padding: 3px 8px; border-radius: 6px; background: rgba(220,38,38,.9); color: #fff; letter-spacing: .06em; }
+.linha .tela .vivo.off { background: rgba(100,116,139,.9); }
+.linha .corpo { padding: 14px 16px; }
+.linha h3 { font-size: 17px; margin: 0 0 2px; }
+.linha .sub { font-size: 12px; color: var(--t3); margin-bottom: 10px; min-height: 16px; }
+.linha .kpis3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.linha .kpis3 div { background: var(--sup); border-radius: 10px; padding: 8px; text-align: center; }
+.linha .kpis3 b { display: block; font-family: var(--display); font-size: 26px; line-height: 1.1; }
+.linha .kpis3 span { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--t3); }
+.ok { color: var(--ok); } .ruim { color: var(--erro); } .neutro { color: var(--t2); }
+.linha .estado { font-size: 11.5px; color: var(--t3); margin-top: 8px; display: flex; justify-content: space-between; }
+.vazio { background: var(--card); border: 1px dashed var(--linha); border-radius: 16px; padding: 40px; text-align: center; color: var(--t3); }
+.vazio a { color: var(--verde-clr); font-weight: 700; }
+.ampliado { position: fixed; inset: 0; background: rgba(0,0,0,.92); z-index: 50; display: none; place-items: center; cursor: zoom-out; }
+.ampliado.on { display: grid; }
+.ampliado img { max-width: 96vw; max-height: 90vh; border-radius: 10px; }
+.ampliado .leg { position: absolute; top: 14px; left: 18px; color: #fff; font-weight: 800; font-size: 18px; }
+
+/* análise */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.kpi { background: var(--card); border: 1px solid var(--linha); border-radius: 12px; padding: 12px 14px; }
+.kpi b { display: block; font-family: var(--display); font-size: 26px; }
+.kpi span { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--t3); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+@media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+.cartao { background: var(--card); border: 1px solid var(--linha); border-radius: 14px; padding: 16px; }
+.cartao h4 { font-size: 13px; margin: 0 0 10px; }
+.cartao .nota { font-size: 11.5px; color: var(--t3); margin-top: 8px; }
+.gr { position: relative; height: 280px; }
+.gr.alto { height: 340px; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th, td { padding: 7px 9px; text-align: left; border-bottom: 1px solid var(--linha); }
+th { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--t3); }
+td img { width: 72px; height: 54px; object-fit: cover; border-radius: 6px; cursor: zoom-in; border: 1px solid var(--linha); }
+.pill { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--sup); }
+.pill.ia { background: var(--fade-suave); color: var(--verde-clr); }
+.pill.menos { background: var(--erro-bg); color: var(--erro); }
+.pill.troca { background: var(--alerta-bg); color: var(--alerta); }
+.rolar { overflow: auto; max-height: 420px; }
+.btn-x { background: none; border: 1px solid var(--linha); color: var(--erro); border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 11px; }
+</style>
+</head>
+<body>
+<header id="topo"></header>
+
+<main class="conteudo">
+  <div class="abas">
+    <button class="aba ativa" data-aba="vivo">📡 Ao vivo <span class="n" id="nLinhas">0</span></button>
+    <button class="aba" data-aba="analise">📈 Análise × takt</button>
+    <button class="aba" data-aba="historico">🗂 Histórico</button>
+    <a class="aba" href="/contador" style="margin-left:auto;text-decoration:none">📱 Ligar um celular na linha</a>
+  </div>
+
+  <!-- ═══ AO VIVO ═══ -->
+  <section class="painel ativo" id="p-vivo">
+    <div class="linhas" id="linhas"></div>
+    <div class="vazio" id="semLinhas" style="display:none">Nenhuma linha transmitindo agora.<br><br>Num celular, abra <a href="/contador">/contador</a>, escolha a célula e aponte a câmera para o pallet.</div>
+  </section>
+
+  <!-- ═══ ANÁLISE ═══ -->
+  <section class="painel" id="p-analise">
+    <div class="barra">
+      <div class="campo"><span class="rotulo">Dia</span><input type="date" class="controle" id="aData"></div>
+      <div class="campo"><span class="rotulo">Célula</span><select class="controle" id="aCelula"></select></div>
+      <div class="campo"><span class="rotulo">Sessão do cadenciador</span><select class="controle" id="aSessao"><option value="">Automática</option></select></div>
+      <button class="btn btn-primario" id="aBuscar">Analisar</button>
+      <button class="btn btn-fantasma" id="aExcel">Exportar Excel</button>
+    </div>
+    <div class="kpis" id="aKpis"></div>
+    <div class="cartao" style="margin-bottom:16px"><h4>Esperado (cadenciador) × Real (câmera) — acumulado ao longo do turno</h4><div class="gr alto"><canvas id="gAcum"></canvas></div>
+      <div class="nota">A linha tracejada é a grade de ciclos do cadenciador (1 produto a cada takt). A linha cheia são os produtos contados no pallet. Quando a cheia fica abaixo da tracejada, a linha está atrasada em relação ao takt.</div></div>
+    <div class="grid2">
+      <div class="cartao"><h4>Intervalo entre saídas × takt (min)</h4><div class="gr"><canvas id="gInt"></canvas></div><div class="nota">Cada barra é o tempo entre um produto e o próximo. Vermelho = acima do takt (gargalo naquele momento).</div></div>
+      <div class="cartao"><h4>Produção por hora × esperado</h4><div class="gr"><canvas id="gHora"></canvas></div></div>
+    </div>
+    <div class="cartao"><h4>Eventos do dia <span class="pill" id="aQtd"></span></h4>
+      <div class="rolar"><table><thead><tr><th>Hora</th><th>Origem</th><th>Valor</th><th>Intervalo</th><th>× takt</th><th>Mudança</th><th>Evidência</th><th></th></tr></thead><tbody id="aTab"></tbody></table></div></div>
+  </section>
+
+  <!-- ═══ HISTÓRICO ═══ -->
+  <section class="painel" id="p-historico">
+    <div class="cartao"><h4>Dias e linhas com contagem</h4>
+      <div class="rolar" style="max-height:70vh"><table><thead><tr><th>Dia</th><th>Célula</th><th>Produto / turno</th><th>Takt</th><th>Previsto (ciclos)</th><th>Contado</th><th>Atendimento</th><th>Câmera</th><th>+1 manual</th><th>−1 manual</th><th>Estornos</th><th>Primeiro</th><th>Último</th><th></th></tr></thead><tbody id="hTab"></tbody></table></div></div>
+  </section>
+</main>
+
+<div class="ampliado" id="ampliado"><div class="leg" id="ampLeg"></div><img id="ampImg" alt=""></div>
+
+<script src="/js/core.js"></script>
+<script src="/js/chart.umd.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let USU = null, graficos = {};
+
+/* abas */
+document.querySelectorAll('.aba[data-aba]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.aba[data-aba]').forEach(x => x.classList.toggle('ativa', x === b));
+  document.querySelectorAll('.painel').forEach(p => p.classList.toggle('ativo', p.id === 'p-' + b.dataset.aba));
+  if (b.dataset.aba === 'historico') carregarHistorico();
+  if (b.dataset.aba === 'analise') analisar();
+});
+
+/* ───────── AO VIVO ───────── */
+let linhasCache = [];
+async function atualizarLinhas() {
+  let linhas; try { linhas = await API.get('/api/contador/linhas'); } catch (_) { return; }
+  linhasCache = linhas;
+  $('nLinhas').textContent = linhas.filter(l => l.online).length;
+  $('semLinhas').style.display = linhas.length ? 'none' : '';
+  const cont = $('linhas');
+  linhas.forEach(l => {
+    const id = 'ln-' + l.celula.replace(/\W+/g, '_');
+    let el = document.getElementById(id);
+    if (!el) { el = document.createElement('div'); el.className = 'linha'; el.id = id; el.innerHTML = `
+      <div class="tela" onclick="ampliar('${escapar(l.celula)}')"><img alt=""><div class="off"></div><span class="vivo">● AO VIVO</span></div>
+      <div class="corpo"><h3></h3><div class="sub"></div>
+        <div class="kpis3"><div><b class="c-real"></b><span>Contado</span></div><div><b class="c-esp"></b><span>Esperado</span></div><div><b class="c-dif"></b><span>Diferença</span></div></div>
+        <div class="estado"><span class="e-est"></span><span class="e-disp"></span></div></div>`; cont.appendChild(el); }
+    el.querySelector('h3').textContent = l.celula;
+    el.querySelector('.sub').textContent = l.produto_nome ? `${l.produto_nome} · ${l.turno_nome} · takt ${l.takt_min} min · ${l.total_ciclos} ciclos previstos` : 'Sem sessão do cadenciador';
+    el.querySelector('.c-real').textContent = l.contagem;
+    el.querySelector('.c-esp').textContent = l.esperado != null ? l.esperado : '—';
+    const dif = el.querySelector('.c-dif');
+    if (l.esperado != null) { const d = l.contagem - l.esperado; dif.textContent = (d > 0 ? '+' : '') + d; dif.className = 'c-dif ' + (d >= 0 ? 'ok' : 'ruim'); } else { dif.textContent = '—'; dif.className = 'c-dif neutro'; }
+    const nomes = { calibrando: 'Calibrando', livre: 'Pallet livre', ocupado: 'Pessoa no pallet', assentando: 'Conferindo' };
+    el.querySelector('.e-est').textContent = l.online ? (nomes[l.estado] || l.estado || '') : 'Último evento: ' + (l.ultimo ? new Date(l.ultimo).toLocaleTimeString('pt-BR') : '—');
+    el.querySelector('.e-disp').textContent = l.usuario ? `${l.usuario}` : '';
+    el.querySelector('.vivo').textContent = l.online ? '● AO VIVO' : 'OFFLINE';
+    el.querySelector('.vivo').className = 'vivo' + (l.online ? '' : ' off');
+    const off = el.querySelector('.off');
+    if (l.online) { off.style.display = 'none'; const img = el.querySelector('img'); if (!img.dataset.carregando) { img.dataset.carregando = '1'; img.onload = img.onerror = () => { img.dataset.carregando = ''; }; img.src = `/api/contador/frame/${encodeURIComponent(l.celula)}?t=${l.frame_ts}`; } }
+    else { off.style.display = ''; off.textContent = l.frame_ts ? 'Celular parou de transmitir' : 'Nenhuma câmera ligada nesta linha hoje'; }
+  });
+  // remove cartões de linhas que sumiram
+  [...cont.children].forEach(el => { if (!linhas.some(l => 'ln-' + l.celula.replace(/\W+/g, '_') === el.id)) el.remove(); });
+}
+let ampCelula = null;
+function ampliar(celula) { ampCelula = celula; $('ampLeg').textContent = celula; $('ampImg').src = `/api/contador/frame/${encodeURIComponent(celula)}?t=${Date.now()}`; $('ampliado').classList.add('on'); }
+$('ampliado').onclick = () => { $('ampliado').classList.remove('on'); ampCelula = null; };
+setInterval(() => { if (ampCelula && $('ampImg').complete) $('ampImg').src = `/api/contador/frame/${encodeURIComponent(ampCelula)}?t=${Date.now()}`; }, 800);
+function ampliarFoto(src, leg) { ampCelula = null; $('ampLeg').textContent = leg || ''; $('ampImg').src = src; $('ampliado').classList.add('on'); }
+
+/* ───────── ANÁLISE ───────── */
+async function carregarFiltros() {
+  const cels = await API.get('/api/prod-celulas').catch(() => []);
+  const nomes = new Set(cels.map(c => c.nome)); linhasCache.forEach(l => nomes.add(l.celula));
+  $('aCelula').innerHTML = '<option value="">Todas</option>' + [...nomes].sort().map(n => `<option value="${escapar(n)}">${escapar(n)}</option>`).join('');
+  await carregarSessoesFiltro();
+}
+async function carregarSessoesFiltro() {
+  const lista = await API.get('/api/cadenciador/sessoes?data=' + $('aData').value).catch(() => []);
+  $('aSessao').innerHTML = '<option value="">Automática</option>' + lista.map(s => `<option value="${s.id}">${escapar(s.produto_nome)} · ${escapar(s.turno_nome)} · takt ${s.takt_min}</option>`).join('');
+}
+function grafico(id, cfg) { if (graficos[id]) graficos[id].destroy(); graficos[id] = new Chart($(id), cfg); }
+const minutos = (a, b) => (new Date(b) - new Date(a)) / 60000;
+const hhmm = t => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+async function analisar() {
+  const data = $('aData').value, celula = $('aCelula').value, sid = $('aSessao').value;
+  let r; try { r = await API.get(`/api/contador/analise?data=${data}&celula=${encodeURIComponent(celula)}${sid ? '&sessao_id=' + sid : ''}`); } catch (e) { return avisoErro(e.message); }
+  const ev = r.eventos, saidas = ev.filter(e => e.valor > 0), takt = r.sessao ? r.sessao.takt_min : null;
+  const contado = ev.reduce((s, e) => s + e.valor, 0);
+  const hojeStr = hojeISO(), agora = new Date().toTimeString().slice(0, 8);
+  const ciclosAte = r.ciclos.filter(c => data < hojeStr || String(c.hora_prevista).slice(0, 8) <= agora);
+  // intervalos
+  const ints = []; for (let i = 1; i < saidas.length; i++) ints.push(minutos(saidas[i - 1].ts, saidas[i].ts));
+  const media = ints.length ? ints.reduce((a, b) => a + b, 0) / ints.length : null;
+  const acima = takt ? ints.filter(i => i > takt * 1.05).length : 0;
+  $('aKpis').innerHTML = [
+    ['Contado', contado, ''], ['Previsto até agora', r.ciclos.length ? ciclosAte.length : '—', ''],
+    ['Diferença', r.ciclos.length ? ((contado - ciclosAte.length > 0 ? '+' : '') + (contado - ciclosAte.length)) : '—', r.ciclos.length ? (contado >= ciclosAte.length ? 'ok' : 'ruim') : ''],
+    ['Takt (min)', takt != null ? takt : '—', ''], ['Intervalo médio (min)', media != null ? media.toFixed(1) : '—', takt && media ? (media <= takt * 1.05 ? 'ok' : 'ruim') : ''],
+    ['Ritmo real', media ? (60 / media).toFixed(1) + ' un/h' : '—', ''], ['Saídas acima do takt', ints.length ? `${acima} de ${ints.length}` : '—', acima ? 'ruim' : ''],
+    ['Pela câmera / manual', `${ev.filter(e => e.origem === 'ia').length} / ${ev.filter(e => e.origem.startsWith('manual')).length}`, '']
+  ].map(k => `<div class="kpi"><b class="${k[2]}">${k[1]}</b><span>${k[0]}</span></div>`).join('');
+
+  // acumulado esperado × real (eixo de tempo)
+  const tempo = (h) => { const [H, M, S] = String(h).slice(0, 8).split(':').map(Number); return new Date(`${data}T00:00:00`).getTime() + (H * 3600 + M * 60 + (S || 0)) * 1000; };
+  const esperado = r.ciclos.map((c, i) => ({ x: tempo(c.hora_prevista), y: i + 1 }));
+  let acc = 0; const real = ev.filter(e => e.valor !== 0).map(e => ({ x: new Date(e.ts).getTime(), y: (acc += e.valor) }));
+  if (real.length) real.unshift({ x: real[0].x - 1, y: 0 });
+  const fmtT = v => new Date(v).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  grafico('gAcum', { type: 'line', data: { datasets: [
+      { label: 'Esperado (cadenciador)', data: esperado, borderColor: '#64748b', borderDash: [6, 4], pointRadius: 0, stepped: true, borderWidth: 2 },
+      { label: 'Real (contado no pallet)', data: real, borderColor: '#35C95C', backgroundColor: 'rgba(53,201,92,.12)', fill: true, pointRadius: 2, stepped: true, borderWidth: 2.5 }
+    ] }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'nearest', intersect: false }, scales: { x: { type: 'linear', ticks: { callback: fmtT, maxTicksLimit: 12 } }, y: { beginAtZero: true, title: { display: true, text: 'unidades' } } }, plugins: { tooltip: { callbacks: { title: it => fmtT(it[0].parsed.x) } } } } });
+
+  // intervalos × takt
+  grafico('gInt', { type: 'bar', data: { labels: ints.map((_, i) => hhmm(saidas[i + 1].ts)), datasets: [
+      { label: 'Intervalo (min)', data: ints.map(v => Math.round(v * 10) / 10), backgroundColor: ints.map(v => takt && v > takt * 1.05 ? '#dc2626' : '#35C95C') },
+      ...(takt ? [{ label: 'Takt', type: 'line', data: ints.map(() => takt), borderColor: '#64748b', borderDash: [6, 4], pointRadius: 0, borderWidth: 2 }] : [])
+    ] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'min' } } } } });
+
+  // por hora
+  const horas = {}; saidas.forEach(e => { const h = new Date(e.ts).getHours(); horas[h] = (horas[h] || 0) + e.valor; });
+  ev.filter(e => e.valor < 0).forEach(e => { const h = new Date(e.ts).getHours(); horas[h] = (horas[h] || 0) + e.valor; });
+  const horasEsp = {}; r.ciclos.forEach(c => { const h = Number(String(c.hora_prevista).slice(0, 2)); horasEsp[h] = (horasEsp[h] || 0) + 1; });
+  const hs = [...new Set([...Object.keys(horas), ...Object.keys(horasEsp)].map(Number))].sort((a, b) => a - b);
+  grafico('gHora', { type: 'bar', data: { labels: hs.map(h => String(h).padStart(2, '0') + 'h'), datasets: [
+      { label: 'Real', data: hs.map(h => horas[h] || 0), backgroundColor: '#35C95C' },
+      { label: 'Esperado', data: hs.map(h => horasEsp[h] || 0), backgroundColor: 'rgba(100,116,139,.45)' }
+    ] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
+
+  // tabela
+  const rot = { ia: ['Câmera', 'ia'], manual_mais: ['+1 manual', ''], manual_menos: ['−1 manual', 'menos'], troca_pallet: ['Troca de pallet', 'troca'], estorno: ['Estorno da câmera', 'menos'] };
+  $('aQtd').textContent = ev.length + ' eventos';
+  let ant = null;
+  $('aTab').innerHTML = ev.map(e => {
+    let intv = '—', cls = '';
+    if (e.valor > 0) { if (ant) { const m = minutos(ant, e.ts); intv = m.toFixed(1) + ' min'; if (takt) cls = m > takt * 1.05 ? 'ruim' : 'ok'; } ant = e.ts; }
+    const xt = takt && intv !== '—' ? (parseFloat(intv) / takt).toFixed(2) + '×' : '—';
+    return `<tr><td>${new Date(e.ts).toLocaleTimeString('pt-BR')}</td><td><span class="pill ${rot[e.origem][1]}">${rot[e.origem][0]}</span></td><td>${e.valor > 0 ? '+' : ''}${e.valor}</td><td class="${cls}">${intv}</td><td class="${cls}">${xt}</td><td>${e.mudanca_pct != null ? e.mudanca_pct + '%' : '—'}</td>
+      <td>${e.tem_foto ? `<img src="/api/contador/eventos/${e.id}/foto" loading="lazy" onclick="ampliarFoto(this.src,'${escapar(e.celula)} · ${new Date(e.ts).toLocaleTimeString('pt-BR')}')">` : '—'}</td>
+      <td>${USU && USU.role !== 'pcp' ? `<button class="btn-x" onclick="excluirEvento(${e.id})">excluir</button>` : ''}</td></tr>`;
+  }).join('') || '<tr><td colspan="8" style="color:var(--t3)">Nenhum evento neste dia.</td></tr>';
+}
+async function excluirEvento(id) { if (!confirm('Excluir este evento da contagem?')) return; try { await API.del('/api/contador/eventos/' + id); analisar(); } catch (e) { avisoErro(e.message); } }
+$('aBuscar').onclick = analisar;
+$('aData').onchange = async () => { await carregarSessoesFiltro(); analisar(); };
+$('aCelula').onchange = analisar; $('aSessao').onchange = analisar;
+$('aExcel').onclick = () => { window.location.href = `/api/export/contador?data=${$('aData').value}&celula=${encodeURIComponent($('aCelula').value)}`; };
+
+/* ───────── HISTÓRICO ───────── */
+async function carregarHistorico() {
+  let h; try { h = await API.get('/api/contador/historico'); } catch (e) { return avisoErro(e.message); }
+  $('hTab').innerHTML = h.map(l => {
+    const at = l.total_ciclos ? Math.round(l.contagem / l.total_ciclos * 100) : null;
+    return `<tr><td>${dataBR(l.data)}</td><td><strong>${escapar(l.celula)}</strong></td><td>${l.produto_nome ? escapar(l.produto_nome) + ' · ' + escapar(l.turno_nome) : '<span style="color:var(--t3)">sem cadenciador</span>'}</td><td>${l.takt_min != null ? l.takt_min + ' min' : '—'}</td><td>${l.total_ciclos || '—'}</td><td><strong>${l.contagem}</strong></td><td class="${at == null ? '' : at >= 100 ? 'ok' : 'ruim'}">${at != null ? at + '%' : '—'}</td><td>${l.ia}</td><td>${l.mais}</td><td>${l.menos}</td><td>${l.estornos}</td><td>${new Date(l.primeiro).toLocaleTimeString('pt-BR')}</td><td>${new Date(l.ultimo).toLocaleTimeString('pt-BR')}</td>
+      <td><button class="btn btn-fantasma btn-sm" onclick="abrirAnalise('${String(l.data).slice(0, 10)}','${escapar(l.celula)}',${l.sessao_id || 'null'})">Analisar</button></td></tr>`;
+  }).join('') || '<tr><td colspan="14" style="color:var(--t3)">Ainda não há contagens.</td></tr>';
+}
+async function abrirAnalise(data, celula, sid) {
+  $('aData').value = data; await carregarSessoesFiltro(); $('aCelula').value = celula; $('aSessao').value = sid || '';
+  document.querySelector('.aba[data-aba="analise"]').click();
+}
+
+(async () => {
+  USU = await montarTopo({ subtitulo: 'Contador por câmera — painel' });
+  $('aData').value = hojeISO();
+  await atualizarLinhas(); await carregarFiltros();
+  setInterval(atualizarLinhas, 900);
+})();
+</script>
+</body>
+</html>

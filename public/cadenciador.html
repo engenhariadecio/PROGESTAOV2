@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cadenciador de Produção — Décio</title>
+<link rel="icon" href="/assets/logo-decio.png">
+<link rel="manifest" href="/cadenciador.webmanifest">
+<meta name="theme-color" content="#1C4984">
+<link rel="stylesheet" href="/css/decio.css">
+<style>
+.barra-sessao {
+  background: var(--card); border: 1px solid var(--linha); border-radius: var(--r);
+  padding: 16px 20px; margin-bottom: 20px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) auto; gap: 14px; align-items: end;
+}
+.barra-sessao .acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── Anel de cadência: o elemento de assinatura desta tela ──
+   Um arco que se esvazia até o próximo ciclo. Nada mais na tela usa círculo. */
+.cadencia { display: grid; grid-template-columns: 200px 1fr; gap: 26px; align-items: center; }
+@media (max-width: 760px) { .cadencia { grid-template-columns: 1fr; justify-items: center; text-align: center; } }
+
+.anel { position: relative; width: 200px; height: 200px; }
+.anel svg { transform: rotate(-90deg); display: block; }
+.anel .trilho { stroke: var(--linha); }
+.anel .arco { stroke: url(#fadeAnel); stroke-linecap: round; transition: stroke-dashoffset .95s linear; }
+.anel.parada .arco { stroke: var(--erro); }
+.anel-centro { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.anel-rot { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--t3); font-weight: 700; }
+.anel-val { font-family: var(--mono); font-size: 34px; font-weight: 700; letter-spacing: -.03em; line-height: 1.1; margin-top: 3px; }
+.anel-sub { font-size: 11px; color: var(--t3); margin-top: 2px; }
+
+.painel-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px,1fr)); gap: 14px; width: 100%; }
+.info-bloco { background: var(--sup); border: 1px solid var(--linha); border-radius: var(--r-sm); padding: 13px 15px; }
+.info-bloco .r { font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--t3); font-weight: 700; }
+.info-bloco .v { font-family: var(--mono); font-size: 21px; font-weight: 700; margin-top: 4px; }
+.v-ok { color: var(--ok); } .v-erro { color: var(--erro); } .v-alerta { color: var(--alerta); }
+
+/* ── Grade de ciclos ── */
+tbody tr.passado td { color: var(--t1); }
+tbody tr.futuro td { opacity: .62; }
+tbody tr.agora { background: var(--fade-suave); }
+tbody tr.agora td:first-child { box-shadow: inset 3px 0 0 var(--verde); }
+
+.obs-input {
+  width: 100%; background: transparent; border: 1px solid transparent;
+  color: var(--t2); font-family: var(--corpo); font-size: 12.5px;
+  padding: 6px 8px; border-radius: var(--r-xs); transition: var(--tr);
+}
+.obs-input:hover { border-color: var(--linha); }
+.obs-input:focus { outline: none; background: var(--sup); border-color: var(--verde); color: var(--t1); }
+
+.check-ciclo { width: 17px; height: 17px; accent-color: var(--verde); cursor: pointer; }
+
+/* ── Painel de chão (tela cheia) ── */
+#chao {
+  position: fixed; inset: 0; z-index: 900; background: var(--fundo);
+  display: none; flex-direction: column; padding: 3vh 4vw;
+}
+#chao.ativo { display: flex; }
+.chao-topo { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.chao-produto { font-family: var(--display); font-size: clamp(18px, 2.4vw, 34px); font-weight: 800; letter-spacing: -.02em; }
+.chao-turno { font-size: clamp(11px, 1.1vw, 15px); color: var(--t3); margin-top: 4px; letter-spacing: .1em; text-transform: uppercase; }
+.chao-relogio { font-family: var(--mono); font-size: clamp(30px, 5vw, 76px); font-weight: 700; letter-spacing: -.03em; }
+
+.chao-grade { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.5vw; align-content: center; }
+@media (max-width: 900px) { .chao-grade { grid-template-columns: 1fr; gap: 14px; } }
+
+.chao-caixa {
+  border: 1px solid var(--linha); border-radius: 20px; padding: 4vh 2vw;
+  text-align: center; background: var(--card); position: relative; overflow: hidden;
+}
+.chao-caixa::before { content:''; position:absolute; top:0; left:0; right:0; height:4px; background: var(--fade); }
+.chao-caixa .r { font-size: clamp(11px, 1.1vw, 16px); letter-spacing: .14em; text-transform: uppercase; color: var(--t3); font-weight: 700; }
+.chao-caixa .v { font-family: var(--mono); font-size: clamp(48px, 8vw, 130px); font-weight: 700; line-height: 1; letter-spacing: -.04em; margin-top: 2vh; }
+.chao-ok .v { color: var(--ok); }
+.chao-nok .v { color: var(--erro); }
+.chao-prox { grid-column: 1 / -1; }
+.chao-prox .v { font-size: clamp(40px, 7vw, 110px); }
+.chao-prox.parada { border-color: var(--erro-bd); }
+.chao-prox.parada::before { background: var(--erro); }
+.chao-prox.parada .v { color: var(--erro); }
+
+.chao-sair { position: absolute; top: 3vh; right: 4vw; z-index: 2; }
+</style>
+</head>
+<body>
+<header id="topo"></header>
+
+<main class="conteudo">
+
+  <!-- Seleção de sessão -->
+  <div class="barra-sessao">
+    <div class="campo">
+      <label class="rotulo" for="selTurno">Turno</label>
+      <select class="controle" id="selTurno"></select>
+    </div>
+    <div class="campo">
+      <label class="rotulo" for="selProduto">Produto em linha</label>
+      <select class="controle" id="selProduto"></select>
+    </div>
+    <div class="campo">
+      <label class="rotulo" for="inData">Data</label>
+      <input class="controle" type="date" id="inData">
+    </div>
+    <div class="acoes">
+      <button class="btn btn-primario" id="btnAbrir">Carregar linha</button>
+      <button class="btn btn-fantasma" id="btnChao" disabled>Painel de chão</button>
+    </div>
+  </div>
+
+  <!-- Cadência -->
+  <section class="cartao" id="cartaoCadencia">
+    <div class="cartao-topo">
+      <h2 class="cartao-titulo">Cadência da linha</h2>
+      <div class="linha-flex">
+        <label class="chave">
+          <input type="checkbox" id="chaveVoz" checked>
+          <span class="chave-tri"></span>
+          <span class="chave-txt">Avisos de voz</span>
+        </label>
+        <button class="btn btn-erro btn-sm" id="btnParar" disabled>Parar linha</button>
+        <button class="btn btn-ok btn-sm oculto" id="btnContinuar">Continuar linha</button>
+      </div>
+    </div>
+    <div class="cartao-corpo">
+      <div class="cadencia">
+        <div class="anel" id="anel">
+          <svg width="200" height="200" viewBox="0 0 200 200" aria-hidden="true">
+            <defs>
+              <linearGradient id="fadeAnel" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%"   stop-color="#26B247"/>
+                <stop offset="55%"  stop-color="#1D6574"/>
+                <stop offset="100%" stop-color="#1C4984"/>
+              </linearGradient>
+            </defs>
+            <circle class="trilho" cx="100" cy="100" r="88" fill="none" stroke-width="10"/>
+            <circle class="arco" id="arco" cx="100" cy="100" r="88" fill="none" stroke-width="10"
+                    stroke-dasharray="552.9" stroke-dashoffset="552.9"/>
+          </svg>
+          <div class="anel-centro">
+            <div class="anel-rot" id="anelRot">Aguardando</div>
+            <div class="anel-val num" id="anelVal">--:--:--</div>
+            <div class="anel-sub" id="anelSub">Selecione turno e produto</div>
+          </div>
+        </div>
+
+        <div class="painel-info">
+          <div class="info-bloco"><div class="r">Ciclos concluídos</div><div class="v v-ok num" id="iOk">0</div></div>
+          <div class="info-bloco"><div class="r">Não concluídos</div><div class="v v-erro num" id="iNok">0</div></div>
+          <div class="info-bloco"><div class="r">Takt time</div><div class="v num" id="iTakt">—</div></div>
+          <div class="info-bloco"><div class="r">Tempo parado</div><div class="v v-alerta num" id="iParado">00:00:00</div></div>
+          <div class="info-bloco"><div class="r">Total de ciclos</div><div class="v num" id="iTotal">0</div></div>
+          <div class="info-bloco"><div class="r">Fim do turno</div><div class="v num" id="iFim">—</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Grade de ciclos -->
+  <section class="cartao">
+    <div class="cartao-topo">
+      <h2 class="cartao-titulo">Horários de ciclo calculados</h2>
+      <div class="linha-flex">
+        <button class="btn btn-fantasma btn-sm" id="btnReset" disabled>Limpar marcações</button>
+        <button class="btn btn-fantasma btn-sm" id="btnExportar" disabled>Exportar Excel</button>
+      </div>
+    </div>
+    <div class="cartao-corpo" style="padding:0">
+      <div class="tabela-wrap" style="max-height:520px;overflow-y:auto">
+        <table>
+          <thead>
+            <tr><th style="width:80px">Ciclo</th><th style="width:130px">Horário</th><th style="width:190px">Status</th><th>Observação</th></tr>
+          </thead>
+          <tbody id="corpoCiclos">
+            <tr><td colspan="4" class="vazio">Escolha o turno e o produto, depois clique em “Carregar linha”.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Painel de chão -->
+<div id="chao">
+  <button class="btn btn-fantasma btn-sm chao-sair" id="btnSairChao">Sair (Esc)</button>
+  <div class="chao-topo">
+    <div>
+      <div class="chao-produto" id="chaoProduto">—</div>
+      <div class="chao-turno" id="chaoTurno">—</div>
+    </div>
+    <div class="chao-relogio num" id="chaoRelogio">--:--:--</div>
+  </div>
+  <div class="chao-grade">
+    <div class="chao-caixa chao-prox" id="chaoProxCaixa">
+      <div class="r" id="chaoProxRot">Próximo ciclo</div>
+      <div class="v num" id="chaoProxVal">--:--:--</div>
+    </div>
+    <div class="chao-caixa chao-ok"><div class="r">Concluídos</div><div class="v num" id="chaoOk">0</div></div>
+    <div class="chao-caixa chao-nok"><div class="r">Não concluídos</div><div class="v num" id="chaoNok">0</div></div>
+  </div>
+</div>
+
+<script src="/js/core.js"></script>
+<script>
+/* ═══════════ Estado ═══════════ */
+
+let SESSAO = null;            // sessão carregada do servidor
+let TURNOS = [];
+let ultimaHoraFalada = '';    // evita repetir o mesmo aviso no mesmo segundo
+
+const CIRC = 2 * Math.PI * 88;   // perímetro do anel
+
+/* ═══════════ Helpers de turno ═══════════ */
+
+/** Segundos decorridos desde o início do turno, tratando virada de meia-noite. */
+function offsetNoTurno(hms, turno) {
+  let o = hmsParaSeg(hms) - hmsParaSeg(turno.hora_inicio);
+  if (o < 0) o += 86400;
+  return o;
+}
+function duracaoTurno(turno) {
+  const i = hmsParaSeg(turno.hora_inicio), f = hmsParaSeg(turno.hora_fim);
+  return f > i ? f - i : (86400 - i) + f;
+}
+function dentroDoTurno(hms, turno) {
+  const o = offsetNoTurno(hms, turno);
+  return o >= 0 && o <= duracaoTurno(turno);
+}
+
+/** Todos os eventos futuros do turno: ciclos, entradas/saídas de intervalo e fim. */
+function proximoEvento(agora) {
+  if (!SESSAO) return null;
+  const t = SESSAO;
+  const oAgora = offsetNoTurno(agora, t);
+  const eventos = [];
+
+  for (const c of t.ciclos) {
+    eventos.push({ rot: 'Próximo ciclo', off: offsetNoTurno(c.hora_prevista, t) });
+  }
+  for (const i of t.intervalos) {
+    eventos.push({ rot: 'Início do ' + i.nome, off: offsetNoTurno(i.hora_inicio, t) });
+    eventos.push({ rot: 'Retorno do ' + i.nome, off: offsetNoTurno(i.hora_fim, t) });
+  }
+  eventos.push({ rot: 'Fim do turno', off: duracaoTurno(t) });
+
+  const futuros = eventos.filter(e => e.off > oAgora).sort((a, b) => a.off - b.off);
+  if (!futuros.length) return null;
+
+  const ev = futuros[0];
+  const anteriores = eventos.filter(e => e.off <= oAgora).map(e => e.off);
+  const base = anteriores.length ? Math.max(...anteriores) : 0;
+
+  return { ...ev, restante: ev.off - oAgora, janela: Math.max(1, ev.off - base) };
+}
+
+/* ═══════════ Render ═══════════ */
+
+function contarCiclos(agora) {
+  if (!SESSAO) return { ok: 0, nok: 0 };
+  const o = offsetNoTurno(agora, SESSAO);
+  let ok = 0, nok = 0;
+  for (const c of SESSAO.ciclos) {
+    if (offsetNoTurno(c.hora_prevista, SESSAO) <= o) (c.concluido ? ok++ : nok++);
+  }
+  return { ok, nok };
+}
+
+function renderCiclos() {
+  const corpo = document.getElementById('corpoCiclos');
+  if (!SESSAO || !SESSAO.ciclos.length) {
+    corpo.innerHTML = '<tr><td colspan="4" class="vazio">Nenhum ciclo calculado para este turno.</td></tr>';
+    return;
+  }
+
+  const agora = agoraHMS();
+  const oAgora = offsetNoTurno(agora, SESSAO);
+  const dentro = dentroDoTurno(agora, SESSAO);
+
+  let idxAtual = -1;
+  if (dentro) idxAtual = SESSAO.ciclos.findIndex(c => offsetNoTurno(c.hora_prevista, SESSAO) > oAgora);
+
+  corpo.innerHTML = SESSAO.ciclos.map((c, i) => {
+    const passou = offsetNoTurno(c.hora_prevista, SESSAO) <= oAgora && dentro;
+    const classe = i === idxAtual ? 'agora' : (passou ? 'passado' : 'futuro');
+
+    const status = passou
+      ? `<label class="linha-flex" style="gap:8px;cursor:pointer">
+           <input type="checkbox" class="check-ciclo" data-num="${c.numero}" ${c.concluido ? 'checked' : ''}>
+           <span class="selo ${c.concluido ? 'selo-ok' : 'selo-erro'}">${c.concluido ? 'Concluído' : 'Não concluído'}</span>
+         </label>`
+      : `<span class="selo selo-neutro">Em andamento</span>`;
+
+    return `<tr class="${classe}">
+      <td class="num destaque">${c.numero}</td>
+      <td class="num destaque">${horaCurta(c.hora_prevista)}</td>
+      <td>${status}</td>
+      <td><input class="obs-input" data-num="${c.numero}" value="${escapar(c.observacao || '')}"
+                 placeholder="${passou ? (c.concluido ? 'Ciclo concluído' : 'Informe o motivo') : ''}"></td>
+    </tr>`;
+  }).join('');
+
+  corpo.querySelectorAll('.check-ciclo').forEach(el => el.onchange = () => salvarCiclo(el.dataset.num, { concluido: el.checked }));
+  corpo.querySelectorAll('.obs-input').forEach(el => {
+    let timer;
+    el.oninput = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => salvarCiclo(el.dataset.num, { observacao: el.value }), 600);
+    };
+  });
+
+  const linhaAtual = corpo.querySelector('tr.agora');
+  if (linhaAtual) linhaAtual.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+async function salvarCiclo(numero, dados) {
+  const c = SESSAO.ciclos.find(x => x.numero == numero);
+  try {
+    await API.put(`/api/cadenciador/sessoes/${SESSAO.id}/ciclos/${numero}`, dados);
+    if (c) Object.assign(c, dados);
+    if ('concluido' in dados) renderCiclos();
+  } catch (e) { avisoErro('Não foi possível salvar: ' + e.message); }
+}
+
+/* ═══════════ Tique de 1 segundo ═══════════ */
+
+function tique() {
+  const agora = agoraHMS();
+  document.getElementById('chaoRelogio').textContent = agora;
+
+  if (!SESSAO) return;
+
+  const { ok, nok } = contarCiclos(agora);
+  document.getElementById('iOk').textContent = ok;
+  document.getElementById('iNok').textContent = nok;
+  document.getElementById('chaoOk').textContent = ok;
+  document.getElementById('chaoNok').textContent = nok;
+
+  const anel = document.getElementById('anel');
+  const arco = document.getElementById('arco');
+  const parada = !!SESSAO.parada_aberta;
+  const caixaProx = document.getElementById('chaoProxCaixa');
+
+  if (parada) {
+    const desde = Math.floor((Date.now() - new Date(SESSAO.parada_aberta.inicio).getTime()) / 1000);
+    anel.classList.add('parada');
+    caixaProx.classList.add('parada');
+    arco.style.strokeDashoffset = 0;
+    document.getElementById('anelRot').textContent = 'Linha parada';
+    document.getElementById('anelVal').textContent = segParaHMS(desde);
+    document.getElementById('anelSub').textContent = 'Aguardando retomada';
+    document.getElementById('chaoProxRot').textContent = 'Linha parada';
+    document.getElementById('chaoProxVal').textContent = segParaHMS(desde);
+    return;
+  }
+
+  anel.classList.remove('parada');
+  caixaProx.classList.remove('parada');
+
+  if (!dentroDoTurno(agora, SESSAO)) {
+    arco.style.strokeDashoffset = CIRC;
+    document.getElementById('anelRot').textContent = 'Fora do turno';
+    document.getElementById('anelVal').textContent = '--:--:--';
+    document.getElementById('anelSub').textContent = `${horaCurta(SESSAO.hora_inicio)} às ${horaCurta(SESSAO.hora_fim)}`;
+    document.getElementById('chaoProxRot').textContent = 'Fora do turno';
+    document.getElementById('chaoProxVal').textContent = '--:--:--';
+    return;
+  }
+
+  const ev = proximoEvento(agora);
+  if (ev) {
+    const restante = segParaHMS(ev.restante);
+    arco.style.strokeDashoffset = CIRC * (1 - ev.restante / ev.janela);
+    document.getElementById('anelRot').textContent = ev.rot;
+    document.getElementById('anelVal').textContent = restante;
+    document.getElementById('anelSub').textContent = 'Tempo restante';
+    document.getElementById('chaoProxRot').textContent = ev.rot;
+    document.getElementById('chaoProxVal').textContent = restante;
+  } else {
+    arco.style.strokeDashoffset = 0;
+    document.getElementById('anelRot').textContent = 'Turno encerrado';
+    document.getElementById('anelVal').textContent = horaCurta(SESSAO.hora_fim);
+    document.getElementById('chaoProxRot').textContent = 'Turno encerrado';
+    document.getElementById('chaoProxVal').textContent = horaCurta(SESSAO.hora_fim);
+  }
+
+  avisarPorVoz(agora);
+
+  // Reclassifica a tabela quando um ciclo acabou de virar passado
+  if (agora.endsWith(':00')) renderCiclos();
+}
+
+function avisarPorVoz(agora) {
+  if (agora === ultimaHoraFalada || SESSAO.parada_aberta) return;
+
+  for (const i of SESSAO.intervalos) {
+    if (i.hora_inicio === agora) { ultimaHoraFalada = agora; Voz.falar(i.aviso_voz || `Intervalo de ${i.nome} iniciado`); return; }
+    if (i.hora_fim === agora)    { ultimaHoraFalada = agora; Voz.falar('Ciclo iniciado'); return; }
+  }
+  if (SESSAO.hora_inicio === agora) { ultimaHoraFalada = agora; Voz.falar('Ciclo iniciado'); return; }
+  if (SESSAO.hora_fim === agora)    { ultimaHoraFalada = agora; Voz.falar('Turno finalizado'); return; }
+
+  if (SESSAO.ciclos.some(c => c.hora_prevista === agora)) {
+    ultimaHoraFalada = agora;
+    Voz.falar('Ciclo finalizado');
+  }
+}
+
+/* ═══════════ Sessão ═══════════ */
+
+function aplicarSessao(s) {
+  SESSAO = s;
+  ultimaHoraFalada = '';
+
+  document.getElementById('iTakt').textContent   = s.takt_min + ' min';
+  document.getElementById('iParado').textContent = segParaHMS(s.tempo_parado_seg || 0);
+  document.getElementById('iTotal').textContent  = s.ciclos.length;
+  document.getElementById('iFim').textContent    = horaCurta(s.hora_fim);
+
+  document.getElementById('chaoProduto').textContent = s.produto_nome;
+  document.getElementById('chaoTurno').textContent   = `${s.turno_nome} · ${horaCurta(s.hora_inicio)}–${horaCurta(s.hora_fim)} · takt ${s.takt_min} min`;
+
+  const parada = !!s.parada_aberta;
+  document.getElementById('btnParar').classList.toggle('oculto', parada);
+  document.getElementById('btnContinuar').classList.toggle('oculto', !parada);
+  document.getElementById('btnParar').disabled = false;
+
+  ['btnChao', 'btnReset', 'btnExportar'].forEach(id => document.getElementById(id).disabled = false);
+
+  renderCiclos();
+  tique();
+}
+
+async function abrirSessao() {
+  const turno_id  = Number(document.getElementById('selTurno').value);
+  const produto_id = Number(document.getElementById('selProduto').value);
+  const data = document.getElementById('inData').value || hojeISO();
+
+  if (!turno_id || !produto_id) { avisoErro('Selecione o turno e o produto.'); return; }
+
+  const btn = document.getElementById('btnAbrir');
+  btn.disabled = true; btn.textContent = 'Carregando…';
+
+  const s = await tentar(() => API.post('/api/cadenciador/sessoes', { turno_id, produto_id, data }));
+  if (s) { aplicarSessao(s); manterTelaLigada(); }
+
+  btn.disabled = false; btn.textContent = 'Carregar linha';
+}
+
+/* ═══════════ Ações ═══════════ */
+
+document.getElementById('btnAbrir').onclick = abrirSessao;
+
+document.getElementById('btnParar').onclick = async () => {
+  const motivo = prompt('Motivo da parada (opcional):') || null;
+  const r = await tentar(() => API.post(`/api/cadenciador/sessoes/${SESSAO.id}/parar`, { motivo }));
+  if (!r) return;
+  SESSAO.parada_aberta = r;
+  document.getElementById('btnParar').classList.add('oculto');
+  document.getElementById('btnContinuar').classList.remove('oculto');
+  Voz.falar('Linha de produção parada');
+};
+
+document.getElementById('btnContinuar').onclick = async () => {
+  const s = await tentar(() => API.post(`/api/cadenciador/sessoes/${SESSAO.id}/continuar`));
+  if (!s) return;
+  aplicarSessao(s);
+  Voz.falar(`Linha continuada. Tempo de parada acumulado: ${segParaHMS(s.tempo_parado_seg)}`);
+  avisoOk('Ciclos recalculados com o tempo de parada.');
+};
+
+document.getElementById('btnReset').onclick = async () => {
+  if (!confirm('Isso marca todos os ciclos como concluídos e apaga as observações. Continuar?')) return;
+  const s = await tentar(() => API.post(`/api/cadenciador/sessoes/${SESSAO.id}/reset`), 'Marcações limpas.');
+  if (s) aplicarSessao(s);
+};
+
+document.getElementById('btnExportar').onclick = () => {
+  window.location.href = `/api/export/ciclos?sessao_id=${SESSAO.id}`;
+};
+
+document.getElementById('chaveVoz').onchange = (e) => { Voz.ativa = e.target.checked; };
+
+/* Painel de chão */
+const chao = document.getElementById('chao');
+document.getElementById('btnChao').onclick = () => {
+  chao.classList.add('ativo');
+  document.body.style.overflow = 'hidden';
+  if (chao.requestFullscreen) chao.requestFullscreen().catch(() => {});
+  manterTelaLigada();
+};
+function sairDoChao() {
+  chao.classList.remove('ativo');
+  document.body.style.overflow = '';
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+document.getElementById('btnSairChao').onclick = sairDoChao;
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && chao.classList.contains('ativo')) sairDoChao(); });
+
+/* Ao trocar de turno, o takt do produto pode mudar */
+document.getElementById('selTurno').onchange = () => carregarProdutos();
+
+async function carregarProdutos() {
+  const turnoId = document.getElementById('selTurno').value;
+  const sel = document.getElementById('selProduto');
+  const escolhido = sel.value;
+
+  const produtos = await API.get('/api/cadenciador/produtos' + (turnoId ? '?turno_id=' + turnoId : '')).catch(() => []);
+  sel.innerHTML = produtos.length
+    ? produtos.map(p => `<option value="${p.id}">${escapar(p.nome)} — ${p.takt_min} min</option>`).join('')
+    : '<option value="">Nenhum produto cadastrado</option>';
+
+  if (escolhido && produtos.some(p => p.id == escolhido)) sel.value = escolhido;
+}
+
+/* ═══════════ Início ═══════════ */
+
+(async () => {
+  await montarTopo({ subtitulo: 'Cadenciador de Produção' });
+
+  document.getElementById('inData').value = hojeISO();
+
+  TURNOS = await API.get('/api/config/turnos?ativos=1').catch(() => []);
+  const selTurno = document.getElementById('selTurno');
+
+  if (!TURNOS.length) {
+    selTurno.innerHTML = '<option value="">Nenhum turno ativo</option>';
+    avisoErro('Nenhum turno ativo. Cadastre um turno em Administração.');
+  } else {
+    selTurno.innerHTML = TURNOS.map(t =>
+      `<option value="${t.id}">${escapar(t.nome)} (${horaCurta(t.hora_inicio)}–${horaCurta(t.hora_fim)})</option>`).join('');
+
+    // Pré-seleciona o turno em vigor agora
+    try {
+      const { turno } = await API.get('/api/config/turnos/atual');
+      if (turno) selTurno.value = turno.id;
+    } catch {}
+  }
+
+  await carregarProdutos();
+  setInterval(tique, 1000);
+})();
+</script>
+</body>
+</html>
