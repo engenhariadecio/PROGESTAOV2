@@ -569,6 +569,22 @@ CREATE TABLE IF NOT EXISTS cont_eventos (
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_cont_ev_celula_ts ON cont_eventos(celula, ts DESC);
+
+/* Uma "linha" do contador = célula + produto do cadenciador. É criada no PC;
+   o celular só abre o link e conecta a câmera. A configuração (área do pallet,
+   tamanho da caixa, câmera, zoom, sensibilidade) fica aqui e é feita pelo PC
+   sobre a imagem ao vivo — o celular aplica o que o servidor mandar. */
+CREATE TABLE IF NOT EXISTS cont_linhas (
+  id            SERIAL PRIMARY KEY,
+  celula        VARCHAR(80) NOT NULL,
+  produto_id    INTEGER REFERENCES cad_produtos(id) ON DELETE SET NULL,
+  nome          VARCHAR(120),
+  config        JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ativa         BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cont_linhas_celula ON cont_linhas(celula);
 CREATE INDEX IF NOT EXISTS idx_cont_ev_sessao ON cont_eventos(sessao_id);
 
 /* ══════════════ LIMPEZA (itens com frequência + agenda por colaborador) ══════════════ */
@@ -654,6 +670,7 @@ CREATE TRIGGER trg_fotos_${tabela} AFTER DELETE ON ${tabela}
  */
 const SQL_MIGRACOES = `
 ALTER TABLE users             ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
+ALTER TABLE cont_eventos      ADD COLUMN IF NOT EXISTS linha_id INTEGER REFERENCES cont_linhas(id) ON DELETE SET NULL;
 
 ALTER TABLE colaboradores     ADD COLUMN IF NOT EXISTS mat VARCHAR(50);
 ALTER TABLE colaboradores     ADD COLUMN IF NOT EXISTS cargo VARCHAR(120);

@@ -3,27 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Contador — Painel ao vivo — Décio</title>
+<title>Contador — Painel — Décio</title>
 <link rel="icon" href="/assets/logo-decio.png">
 <link rel="stylesheet" href="/css/decio.css">
 <style>
 .conteudo { max-width: 1400px; }
-.abas { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+.abas { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; align-items: center; }
 .aba { border: 1px solid var(--linha); background: var(--card); color: var(--t2); padding: 8px 16px; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 13px; }
 .aba.ativa { background: var(--verde); color: #fff; border-color: var(--verde); }
 .aba .n { background: rgba(255,255,255,.2); border-radius: 99px; padding: 1px 7px; font-size: 11px; margin-left: 6px; }
 .painel { display: none; } .painel.ativo { display: block; }
 .barra { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-bottom: 16px; }
 .barra .campo { display: grid; gap: 4px; }
-.barra .rotulo { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--t3); font-weight: 700; }
 .barra select, .barra input { min-width: 150px; }
 
 /* ao vivo */
-.linhas { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.linhas { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
 .linha { background: var(--card); border: 1px solid var(--linha); border-radius: 16px; overflow: hidden; }
 .linha .tela { position: relative; background: #0b1620; aspect-ratio: 4/3; cursor: zoom-in; }
 .linha .tela img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.linha .tela .off { position: absolute; inset: 0; display: grid; place-items: center; color: #8aa0b0; font-size: 13px; text-align: center; padding: 20px; background: rgba(11,22,32,.85); }
+.linha .tela .off { position: absolute; inset: 0; display: grid; place-items: center; color: #8aa0b0; font-size: 13px; text-align: center; padding: 20px; background: rgba(11,22,32,.9); line-height: 1.5; }
 .linha .tela .vivo { position: absolute; top: 8px; right: 8px; font-size: 10.5px; font-weight: 800; padding: 3px 8px; border-radius: 6px; background: rgba(220,38,38,.9); color: #fff; letter-spacing: .06em; }
 .linha .tela .vivo.off { background: rgba(100,116,139,.9); }
 .linha .corpo { padding: 14px 16px; }
@@ -35,12 +34,33 @@
 .linha .kpis3 span { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--t3); }
 .ok { color: var(--ok); } .ruim { color: var(--erro); } .neutro { color: var(--t2); }
 .linha .estado { font-size: 11.5px; color: var(--t3); margin-top: 8px; display: flex; justify-content: space-between; }
-.vazio { background: var(--card); border: 1px dashed var(--linha); border-radius: 16px; padding: 40px; text-align: center; color: var(--t3); }
-.vazio a { color: var(--verde-clr); font-weight: 700; }
+.linha .acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.vazio { background: var(--card); border: 1px dashed var(--linha); border-radius: 16px; padding: 40px; text-align: center; color: var(--t3); line-height: 1.6; }
 .ampliado { position: fixed; inset: 0; background: rgba(0,0,0,.92); z-index: 50; display: none; place-items: center; cursor: zoom-out; }
 .ampliado.on { display: grid; }
 .ampliado img { max-width: 96vw; max-height: 90vh; border-radius: 10px; }
 .ampliado .leg { position: absolute; top: 14px; left: 18px; color: #fff; font-weight: 800; font-size: 18px; }
+
+/* configuração remota */
+.cfg { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; }
+@media (max-width: 860px) { .cfg { grid-template-columns: 1fr; } }
+.cfg .palco { position: relative; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 4/3; border: 1px solid var(--linha); }
+.cfg .palco img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.cfg .palco canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+.cfg .palco .semimg { position: absolute; inset: 0; display: grid; place-items: center; color: #8aa0b0; font-size: 13px; text-align: center; padding: 20px; }
+.modo { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
+.modo .btn.sel { background: var(--verde); color: #fff; border-color: var(--verde); }
+.cfg .lado { display: grid; gap: 12px; align-content: start; }
+.cfg .lado .campo { display: grid; gap: 4px; }
+.cfg .lado input[type=range] { width: 100%; }
+.cfg .lado .valor { font-size: 12px; color: var(--t2); }
+.cfg .lado .grupo { border: 1px solid var(--linha); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
+.cfg .lado .grupo h5 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--t3); }
+.cfg .cmds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.lbl { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.qr { text-align: center; }
+.qr img { width: 240px; height: 240px; background: #fff; border-radius: 12px; padding: 8px; }
+.qr code { display: block; margin-top: 10px; font-size: 13px; word-break: break-all; background: var(--sup); padding: 8px; border-radius: 8px; }
 
 /* análise */
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
@@ -74,20 +94,20 @@ td img { width: 72px; height: 54px; object-fit: cover; border-radius: 6px; curso
     <button class="aba ativa" data-aba="vivo">📡 Ao vivo <span class="n" id="nLinhas">0</span></button>
     <button class="aba" data-aba="analise">📈 Análise × takt</button>
     <button class="aba" data-aba="historico">🗂 Histórico</button>
-    <a class="aba" href="/contador" style="margin-left:auto;text-decoration:none">📱 Ligar um celular na linha</a>
+    <button class="btn btn-primario" id="btnNova" style="margin-left:auto;display:none">＋ Nova linha</button>
   </div>
 
   <!-- ═══ AO VIVO ═══ -->
   <section class="painel ativo" id="p-vivo">
     <div class="linhas" id="linhas"></div>
-    <div class="vazio" id="semLinhas" style="display:none">Nenhuma linha transmitindo agora.<br><br>Num celular, abra <a href="/contador">/contador</a>, escolha a célula e aponte a câmera para o pallet.</div>
+    <div class="vazio" id="semLinhas" style="display:none">Nenhuma linha criada.<br>Clique em <b>Nova linha</b>, escolha a célula e o produto do cadenciador; depois abra o link no celular e conecte a câmera.</div>
   </section>
 
   <!-- ═══ ANÁLISE ═══ -->
   <section class="painel" id="p-analise">
     <div class="barra">
       <div class="campo"><span class="rotulo">Dia</span><input type="date" class="controle" id="aData"></div>
-      <div class="campo"><span class="rotulo">Célula</span><select class="controle" id="aCelula"></select></div>
+      <div class="campo"><span class="rotulo">Linha</span><select class="controle" id="aLinha"></select></div>
       <div class="campo"><span class="rotulo">Sessão do cadenciador</span><select class="controle" id="aSessao"><option value="">Automática</option></select></div>
       <button class="btn btn-primario" id="aBuscar">Analisar</button>
       <button class="btn btn-fantasma" id="aExcel">Exportar Excel</button>
@@ -110,24 +130,86 @@ td img { width: 72px; height: 54px; object-fit: cover; border-radius: 6px; curso
   </section>
 </main>
 
+<!-- ═══ MODAL: nova linha / editar ═══ -->
+<div class="modal-fundo" id="mLinha"><div class="modal">
+  <div class="modal-topo"><div class="modal-titulo" id="mLinhaTit">Nova linha</div><button class="modal-fechar" onclick="fecharModal('mLinha')">×</button></div>
+  <div class="modal-corpo" style="display:grid;gap:14px">
+    <input type="hidden" id="lId">
+    <div class="campo"><span class="rotulo">Célula</span><select class="controle" id="lCelula"></select></div>
+    <div class="campo"><span class="rotulo">Produto (cadenciador)</span><select class="controle" id="lProduto"><option value="">— sem produto (só contar) —</option></select>
+      <div class="ajuda">O takt e a grade de ciclos vêm da sessão do cadenciador aberta hoje para este produto.</div></div>
+    <div class="campo"><span class="rotulo">Nome da linha (opcional)</span><input class="controle" id="lNome" placeholder="Ex.: Linha 1 — Rack 19&quot;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-fantasma" onclick="fecharModal('mLinha')">Cancelar</button><button class="btn btn-primario" id="lSalvar">Salvar</button></div>
+  </div></div></div>
+
+<!-- ═══ MODAL: link / QR ═══ -->
+<div class="modal-fundo" id="mQr"><div class="modal">
+  <div class="modal-topo"><div class="modal-titulo">Conectar um celular</div><button class="modal-fechar" onclick="fecharModal('mQr')">×</button></div>
+  <div class="modal-corpo qr">
+    <p class="ajuda" style="margin-bottom:12px">No celular, faça login no sistema e abra este endereço (ou leia o QR). Toque em <b>Conectar câmera</b>. A imagem aparece aqui em seguida e a área/câmera são configuradas por este painel.</p>
+    <img id="qrImg" alt="QR"><code id="qrLink"></code>
+  </div></div></div>
+
+<!-- ═══ MODAL: configurar câmera ═══ -->
+<div class="modal-fundo" id="mCfg"><div class="modal modal-lg" style="max-width:1100px">
+  <div class="modal-topo"><div class="modal-titulo" id="cfgTit">Configurar câmera</div><button class="modal-fechar" onclick="fecharCfg()">×</button></div>
+  <div class="modal-corpo">
+    <div class="cfg">
+      <div>
+        <div class="palco"><img id="cfgImg" alt=""><div class="semimg" id="cfgSem">Aguardando a imagem do celular…</div><canvas id="cfgCanvas"></canvas></div>
+        <div class="modo">
+          <button class="btn btn-sm btn-fantasma sel" data-modo="zona">▭ Área do pallet</button>
+          <button class="btn btn-sm btn-fantasma" data-modo="caixa">▢ Tamanho de uma caixa</button>
+          <span class="ajuda" id="cfgDica" style="align-self:center">Arraste sobre a imagem para marcar a área onde as caixas ficam (toda a altura das pilhas).</span>
+        </div>
+        <div class="ajuda" id="cfgResumo"></div>
+      </div>
+      <div class="lado">
+        <div class="grupo"><h5>Detecção</h5>
+          <div class="campo"><span class="rotulo">Sensibilidade <span class="valor" id="sensVal">5</span></span><input type="range" id="cSens" min="1" max="10" step="1"></div>
+          <label class="lbl"><input type="checkbox" id="cMult"> Contar várias caixas colocadas de uma vez (usa o tamanho da caixa)</label>
+        </div>
+        <div class="grupo"><h5>Câmera do celular</h5>
+          <div class="campo"><span class="rotulo">Câmera</span><select class="controle" id="cCamera"><option value="">Traseira (padrão)</option></select></div>
+          <div class="campo"><span class="rotulo">Resolução</span><select class="controle" id="cRes"><option value="baixa">Baixa (640×480)</option><option value="media">Média (1280×960)</option><option value="alta">Alta (1920×1440)</option></select></div>
+          <div class="campo" id="cZoomWrap"><span class="rotulo">Zoom <span class="valor" id="zoomVal">—</span></span><input type="range" id="cZoom" min="1" max="1" step="0.1" disabled><span class="ajuda" id="zoomAjuda">Este celular não informou zoom.</span></div>
+          <label class="lbl"><input type="checkbox" id="cLant"> Lanterna (se o celular permitir)</label>
+          <div class="ajuda" id="cfgCap"></div>
+        </div>
+        <div class="grupo"><h5>Comandos para o celular</h5>
+          <div class="cmds">
+            <button class="btn btn-sm btn-fantasma" data-cmd="recalibrar">Recalibrar</button>
+            <button class="btn btn-sm btn-fantasma" data-cmd="troca_pallet">Pallet trocado</button>
+            <button class="btn btn-sm btn-ok" data-cmd="mais">+1</button>
+            <button class="btn btn-sm btn-fantasma" data-cmd="menos">−1</button>
+            <button class="btn btn-sm btn-fantasma" data-cmd="reiniciar_camera">Reiniciar câmera</button>
+            <button class="btn btn-sm btn-fantasma" data-cmd="encerrar">Encerrar no celular</button>
+          </div>
+        </div>
+        <div class="ajuda" id="cfgStatus"></div>
+      </div>
+    </div>
+  </div></div></div>
+
 <div class="ampliado" id="ampliado"><div class="leg" id="ampLeg"></div><img id="ampImg" alt=""></div>
 
 <script src="/js/core.js"></script>
 <script src="/js/chart.umd.js"></script>
 <script>
 const $ = id => document.getElementById(id);
-let USU = null, graficos = {};
+let USU = null, graficos = {}, linhasCache = [], celulas = [], produtos = [];
+const podeEditar = () => USU && USU.role !== 'pcp';
+const ehAdmin = () => USU && USU.role === 'admin';
 
 /* abas */
 document.querySelectorAll('.aba[data-aba]').forEach(b => b.onclick = () => {
   document.querySelectorAll('.aba[data-aba]').forEach(x => x.classList.toggle('ativa', x === b));
   document.querySelectorAll('.painel').forEach(p => p.classList.toggle('ativo', p.id === 'p-' + b.dataset.aba));
   if (b.dataset.aba === 'historico') carregarHistorico();
-  if (b.dataset.aba === 'analise') analisar();
+  if (b.dataset.aba === 'analise') { preencherLinhasAnalise(); analisar(); }
 });
 
 /* ───────── AO VIVO ───────── */
-let linhasCache = [];
 async function atualizarLinhas() {
   let linhas; try { linhas = await API.get('/api/contador/linhas'); } catch (_) { return; }
   linhasCache = linhas;
@@ -135,43 +217,166 @@ async function atualizarLinhas() {
   $('semLinhas').style.display = linhas.length ? 'none' : '';
   const cont = $('linhas');
   linhas.forEach(l => {
-    const id = 'ln-' + l.celula.replace(/\W+/g, '_');
+    const id = 'ln-' + l.id;
     let el = document.getElementById(id);
     if (!el) { el = document.createElement('div'); el.className = 'linha'; el.id = id; el.innerHTML = `
-      <div class="tela" onclick="ampliar('${escapar(l.celula)}')"><img alt=""><div class="off"></div><span class="vivo">● AO VIVO</span></div>
+      <div class="tela" onclick="ampliar(${l.id})"><img alt=""><div class="off"></div><span class="vivo">● AO VIVO</span></div>
       <div class="corpo"><h3></h3><div class="sub"></div>
         <div class="kpis3"><div><b class="c-real"></b><span>Contado</span></div><div><b class="c-esp"></b><span>Esperado</span></div><div><b class="c-dif"></b><span>Diferença</span></div></div>
-        <div class="estado"><span class="e-est"></span><span class="e-disp"></span></div></div>`; cont.appendChild(el); }
-    el.querySelector('h3').textContent = l.celula;
-    el.querySelector('.sub').textContent = l.produto_nome ? `${l.produto_nome} · ${l.turno_nome} · takt ${l.takt_min} min · ${l.total_ciclos} ciclos previstos` : 'Sem sessão do cadenciador';
+        <div class="estado"><span class="e-est"></span><span class="e-disp"></span></div>
+        <div class="acoes"></div></div>`; cont.appendChild(el); }
+    el.querySelector('h3').textContent = l.nome || l.celula;
+    const s = l.sessao;
+    el.querySelector('.sub').textContent = `${l.celula}${l.produto_nome ? ' · ' + l.produto_nome : ''}` + (s ? ` · ${s.turno_nome} · takt ${s.takt_min} min · ${s.total_ciclos} ciclos` : l.produto_id ? ' · sem sessão do cadenciador hoje' : ' · sem produto');
     el.querySelector('.c-real').textContent = l.contagem;
-    el.querySelector('.c-esp').textContent = l.esperado != null ? l.esperado : '—';
+    el.querySelector('.c-esp').textContent = s ? s.esperado : '—';
     const dif = el.querySelector('.c-dif');
-    if (l.esperado != null) { const d = l.contagem - l.esperado; dif.textContent = (d > 0 ? '+' : '') + d; dif.className = 'c-dif ' + (d >= 0 ? 'ok' : 'ruim'); } else { dif.textContent = '—'; dif.className = 'c-dif neutro'; }
-    const nomes = { calibrando: 'Calibrando', livre: 'Pallet livre', ocupado: 'Pessoa no pallet', assentando: 'Conferindo' };
-    el.querySelector('.e-est').textContent = l.online ? (nomes[l.estado] || l.estado || '') : 'Último evento: ' + (l.ultimo ? new Date(l.ultimo).toLocaleTimeString('pt-BR') : '—');
-    el.querySelector('.e-disp').textContent = l.usuario ? `${l.usuario}` : '';
-    el.querySelector('.vivo').textContent = l.online ? '● AO VIVO' : 'OFFLINE';
+    if (s) { const d = l.contagem - s.esperado; dif.textContent = (d > 0 ? '+' : '') + d; dif.className = 'c-dif ' + (d >= 0 ? 'ok' : 'ruim'); } else { dif.textContent = '—'; dif.className = 'c-dif neutro'; }
+    const nomes = { calibrando: 'Calibrando', livre: 'Pallet livre', ocupado: 'Pessoa no pallet', assentando: 'Conferindo', confirmando: 'Confirmando' };
+    el.querySelector('.e-est').textContent = l.online ? (nomes[l.estado] || l.estado || '') + (l.config.zona ? '' : ' · sem área marcada') : 'Último evento: ' + (l.ultimo ? new Date(l.ultimo).toLocaleTimeString('pt-BR') : '—');
+    el.querySelector('.e-disp').textContent = l.online && l.usuario ? l.usuario : '';
+    el.querySelector('.vivo').textContent = l.online ? '● AO VIVO' : 'SEM CÂMERA';
     el.querySelector('.vivo').className = 'vivo' + (l.online ? '' : ' off');
     const off = el.querySelector('.off');
-    if (l.online) { off.style.display = 'none'; const img = el.querySelector('img'); if (!img.dataset.carregando) { img.dataset.carregando = '1'; img.onload = img.onerror = () => { img.dataset.carregando = ''; }; img.src = `/api/contador/frame/${encodeURIComponent(l.celula)}?t=${l.frame_ts}`; } }
-    else { off.style.display = ''; off.textContent = l.frame_ts ? 'Celular parou de transmitir' : 'Nenhuma câmera ligada nesta linha hoje'; }
+    if (l.online) { off.style.display = 'none'; const img = el.querySelector('img'); if (!img.dataset.carregando && img.dataset.ts !== String(l.frame_ts)) { img.dataset.carregando = '1'; img.dataset.ts = l.frame_ts; img.onload = img.onerror = () => { img.dataset.carregando = ''; }; img.src = `/api/contador/frame/${l.id}?t=${l.frame_ts}`; } }
+    else { off.style.display = ''; off.innerHTML = l.frame_ts ? 'O celular parou de transmitir' : 'Nenhum celular conectado.<br><small>Clique em <b>Link / QR</b> e abra no celular.</small>'; }
+    const ac = el.querySelector('.acoes');
+    ac.innerHTML = `<button class="btn btn-sm btn-fantasma" onclick="abrirQr(${l.id})">🔗 Link / QR</button>` +
+      (podeEditar() ? `<button class="btn btn-sm btn-primario" onclick="abrirCfg(${l.id})">⚙ Configurar câmera</button>` : '') +
+      (podeEditar() && l.produto_id && !s ? `<button class="btn btn-sm btn-ok" onclick="abrirSessao(${l.id})">▶ Iniciar cadenciador</button>` : '') +
+      (ehAdmin() ? `<button class="btn btn-sm btn-fantasma" onclick="editarLinha(${l.id})">✎</button><button class="btn btn-sm btn-fantasma" onclick="removerLinha(${l.id})" title="Remover linha">🗑</button>` : '');
   });
-  // remove cartões de linhas que sumiram
-  [...cont.children].forEach(el => { if (!linhas.some(l => 'ln-' + l.celula.replace(/\W+/g, '_') === el.id)) el.remove(); });
+  [...cont.children].forEach(el => { if (!linhas.some(l => 'ln-' + l.id === el.id)) el.remove(); });
+  if (cfgLinha) atualizarCfgVivo();
 }
-let ampCelula = null;
-function ampliar(celula) { ampCelula = celula; $('ampLeg').textContent = celula; $('ampImg').src = `/api/contador/frame/${encodeURIComponent(celula)}?t=${Date.now()}`; $('ampliado').classList.add('on'); }
-$('ampliado').onclick = () => { $('ampliado').classList.remove('on'); ampCelula = null; };
-setInterval(() => { if (ampCelula && $('ampImg').complete) $('ampImg').src = `/api/contador/frame/${encodeURIComponent(ampCelula)}?t=${Date.now()}`; }, 800);
-function ampliarFoto(src, leg) { ampCelula = null; $('ampLeg').textContent = leg || ''; $('ampImg').src = src; $('ampliado').classList.add('on'); }
+let ampId = null;
+function ampliar(id) { const l = linhasCache.find(x => x.id === id); if (!l || !l.online) return; ampId = id; $('ampLeg').textContent = l.nome || l.celula; $('ampImg').src = `/api/contador/frame/${id}?t=${Date.now()}`; $('ampliado').classList.add('on'); }
+$('ampliado').onclick = () => { $('ampliado').classList.remove('on'); ampId = null; };
+setInterval(() => { if (ampId && $('ampImg').complete) $('ampImg').src = `/api/contador/frame/${ampId}?t=${Date.now()}`; }, 800);
+function ampliarFoto(src, leg) { ampId = null; $('ampLeg').textContent = leg || ''; $('ampImg').src = src; $('ampliado').classList.add('on'); }
+
+/* ───────── Linhas: criar / editar / remover ───────── */
+async function carregarCadastros() {
+  celulas = await API.get('/api/prod-celulas').catch(() => []);
+  produtos = await API.get('/api/cadenciador/produtos').catch(() => []);
+  $('lCelula').innerHTML = '<option value="">Selecione…</option>' + celulas.filter(c => c.ativa !== false).map(c => `<option value="${escapar(c.nome)}">${escapar(c.nome)}${c.categoria ? ' — ' + escapar(c.categoria) : ''}</option>`).join('');
+  $('lProduto').innerHTML = '<option value="">— sem produto (só contar) —</option>' + produtos.map(p => `<option value="${p.id}" data-celula="${escapar(p.celula_nome || '')}">${escapar(p.nome)}${p.cod_decio ? ' (' + escapar(p.cod_decio) + ')' : ''} · takt ${p.takt_min} min${p.celula_nome ? ' · ' + escapar(p.celula_nome) : ''}</option>`).join('');
+}
+$('lCelula').onchange = () => {   // sugere o produto cadastrado para a célula
+  const cel = $('lCelula').value; if (!cel || $('lProduto').value) return;
+  const p = produtos.find(x => x.celula_nome === cel); if (p) $('lProduto').value = p.id;
+};
+$('btnNova').onclick = () => { $('lId').value = ''; $('lCelula').value = ''; $('lProduto').value = ''; $('lNome').value = ''; $('mLinhaTit').textContent = 'Nova linha'; abrirModal('mLinha'); };
+function editarLinha(id) { const l = linhasCache.find(x => x.id === id); if (!l) return; $('lId').value = id; $('lCelula').value = l.celula; $('lProduto').value = l.produto_id || ''; $('lNome').value = l.nome || ''; $('mLinhaTit').textContent = 'Editar linha'; abrirModal('mLinha'); }
+$('lSalvar').onclick = async () => {
+  const body = { celula: $('lCelula').value, produto_id: $('lProduto').value || null, nome: $('lNome').value.trim() || null };
+  if (!body.celula) return avisoErro('Escolha a célula.');
+  try {
+    const id = $('lId').value;
+    const l = id ? await API.put('/api/contador/linhas/' + id, body) : await API.post('/api/contador/linhas', body);
+    fecharModal('mLinha'); await atualizarLinhas(); avisoOk('Linha salva.');
+    if (!id) abrirQr(l.id);
+  } catch (e) { avisoErro(e.message); }
+};
+async function removerLinha(id) { if (!confirm('Remover esta linha do contador? O histórico de contagens é mantido.')) return; try { await API.del('/api/contador/linhas/' + id); atualizarLinhas(); } catch (e) { avisoErro(e.message); } }
+function abrirQr(id) { $('qrImg').src = `/api/contador/linhas/${id}/qr.svg`; $('qrLink').textContent = `${location.origin}/contador?linha=${id}`; abrirModal('mQr'); }
+async function abrirSessao(id) {
+  const l = linhasCache.find(x => x.id === id); if (!l || !l.produto_id) return;
+  try {
+    const { turno } = await API.get('/api/config/turnos/atual');
+    if (!turno) return avisoErro('Nenhum turno cobre o horário atual — abra a sessão pelo Cadenciador.');
+    await API.post('/api/cadenciador/sessoes', { turno_id: turno.id, produto_id: l.produto_id });
+    avisoOk('Sessão do cadenciador aberta para ' + l.produto_nome + ' · ' + turno.nome); atualizarLinhas();
+  } catch (e) { avisoErro(e.message); }
+}
+
+/* ───────── Configurar câmera (remoto) ───────── */
+let cfgLinha = null, cfgModo = 'zona', cfgCfg = {}, cfgDesenho = null, cfgIni = null, cfgTimer = null, cfgSalvarT = null;
+const cfgCanvas = $('cfgCanvas'), cctx = cfgCanvas.getContext('2d');
+function abrirCfg(id) {
+  const l = linhasCache.find(x => x.id === id); if (!l) return;
+  cfgLinha = l; cfgCfg = { ...l.config };
+  $('cfgTit').textContent = 'Configurar câmera — ' + (l.nome || l.celula);
+  $('cSens').value = cfgCfg.sens || 5; $('sensVal').textContent = cfgCfg.sens || 5;
+  $('cMult').checked = !!cfgCfg.multiplas; $('cRes').value = cfgCfg.resolucao || 'media'; $('cLant').checked = !!cfgCfg.lanterna;
+  preencherCapacidades(l);
+  $('cfgImg').removeAttribute('src'); $('cfgImg').dataset.ts = '';
+  abrirModal('mCfg'); atualizarCfgVivo(); desenharCfg(); resumoCfg();
+  cfgTimer = setInterval(desenharCfg, 300);
+}
+function fecharCfg() { fecharModal('mCfg'); cfgLinha = null; clearInterval(cfgTimer); }
+function preencherCapacidades(l) {
+  const cap = l.capacidades || {};
+  const cams = cap.cameras || [];
+  $('cCamera').innerHTML = '<option value="">Traseira (padrão)</option>' + cams.map(c => `<option value="${escapar(c.id)}">${escapar(c.label)}</option>`).join('');
+  $('cCamera').value = cfgCfg.camera && cams.some(c => c.id === cfgCfg.camera) ? cfgCfg.camera : '';
+  const z = $('cZoom');
+  if (cap.zoom) { z.disabled = false; z.min = cap.zoom.min; z.max = cap.zoom.max; z.step = cap.zoom.step || 0.1; z.value = cfgCfg.zoom != null ? cfgCfg.zoom : (cap.zoom.atual || cap.zoom.min); $('zoomVal').textContent = Number(z.value).toFixed(1) + '×'; $('zoomAjuda').textContent = `De ${cap.zoom.min}× a ${cap.zoom.max}×`; }
+  else { z.disabled = true; $('zoomVal').textContent = '—'; $('zoomAjuda').textContent = l.online ? 'Este celular não oferece zoom pela câmera do navegador. Aproxime o suporte ou troque de câmera.' : 'Conecte o celular para ver as opções de zoom.'; }
+  $('cLant').disabled = !cap.lanterna;
+  $('cfgCap').textContent = l.online ? `Celular: ${l.dispositivo || ''} · ${cap.largura || '?'}×${cap.altura || '?'} · IA ${cap.ia ? 'ativa' : 'indisponível (só movimento)'}` : 'Celular não conectado — a configuração fica salva e é aplicada quando ele conectar.';
+}
+function atualizarCfgVivo() {
+  const l = linhasCache.find(x => x.id === cfgLinha.id); if (!l) return;
+  const capAntes = JSON.stringify(cfgLinha.capacidades), online = cfgLinha.online;
+  cfgLinha = l;
+  if (JSON.stringify(l.capacidades) !== capAntes || online !== l.online) preencherCapacidades(l);
+  $('cfgSem').style.display = l.online ? 'none' : '';
+  $('cfgStatus').textContent = l.online ? `Ao vivo · ${({ calibrando: 'calibrando', livre: 'pallet livre', ocupado: 'pessoa no pallet', assentando: 'conferindo', confirmando: 'confirmando' })[l.estado] || l.estado} · contagem ${l.contagem}` : 'Sem imagem';
+  const img = $('cfgImg');
+  if (l.online && img.dataset.ts !== String(l.frame_ts) && !img.dataset.carregando) { img.dataset.carregando = '1'; img.dataset.ts = l.frame_ts; img.onload = img.onerror = () => { img.dataset.carregando = ''; }; img.src = `/api/contador/frame/${l.id}?t=${l.frame_ts}`; }
+}
+function desenharCfg() {
+  const W = cfgCanvas.width = cfgCanvas.clientWidth, H = cfgCanvas.height = cfgCanvas.clientHeight;
+  cctx.clearRect(0, 0, W, H);
+  const z = cfgModo === 'zona' && cfgDesenho ? cfgDesenho : cfgCfg.zona;
+  if (z) { cctx.strokeStyle = '#35C95C'; cctx.lineWidth = 3; cctx.strokeRect(z.x * W, z.y * H, z.w * W, z.h * H); cctx.fillStyle = 'rgba(53,201,92,.10)'; cctx.fillRect(z.x * W, z.y * H, z.w * W, z.h * H);
+    cctx.fillStyle = '#35C95C'; cctx.font = 'bold 12px sans-serif'; cctx.fillText('ÁREA DO PALLET', z.x * W + 6, z.y * H - 6 > 10 ? z.y * H - 6 : z.y * H + 16); }
+  const c = cfgModo === 'caixa' && cfgDesenho ? cfgDesenho : (cfgCfg.caixa && cfgCfg.caixa_pos ? { ...cfgCfg.caixa_pos, ...cfgCfg.caixa } : null);
+  if (c) { cctx.strokeStyle = '#F0B429'; cctx.lineWidth = 2; cctx.setLineDash([6, 4]); cctx.strokeRect(c.x * W, c.y * H, c.w * W, c.h * H); cctx.setLineDash([]); cctx.fillStyle = '#F0B429'; cctx.font = 'bold 12px sans-serif'; cctx.fillText('1 CAIXA', c.x * W + 6, c.y * H + 16); }
+}
+function resumoCfg() {
+  const z = cfgCfg.zona, c = cfgCfg.caixa;
+  let t = z ? `Área: ${Math.round(z.w * 100)}% × ${Math.round(z.h * 100)}% da imagem.` : 'Área do pallet ainda não marcada — o celular não conta sem ela.';
+  if (z && c) { const n = (z.w * z.h) / (c.w * c.h); t += ` Cabem ~${Math.round(n)} caixas na área; uma caixa = ${(100 / n).toFixed(1)}% da área.`; }
+  else if (z) t += ' Marque também o tamanho de uma caixa para a contagem ficar mais precisa.';
+  $('cfgResumo').textContent = t;
+}
+document.querySelectorAll('.modo [data-modo]').forEach(b => b.onclick = () => { cfgModo = b.dataset.modo; document.querySelectorAll('.modo [data-modo]').forEach(x => x.classList.toggle('sel', x === b)); $('cfgDica').textContent = cfgModo === 'zona' ? 'Arraste sobre a imagem para marcar a área onde as caixas ficam (toda a altura das pilhas).' : 'Arraste sobre uma caixa já no pallet, do tamanho exato dela.'; });
+const normCfg = e => { const r = cfgCanvas.getBoundingClientRect(); return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) }; };
+cfgCanvas.addEventListener('pointerdown', e => { e.preventDefault(); try { cfgCanvas.setPointerCapture(e.pointerId); } catch (_) {} cfgIni = normCfg(e); cfgDesenho = { ...cfgIni, w: 0, h: 0 }; });
+cfgCanvas.addEventListener('pointermove', e => { if (!cfgIni) return; const p = normCfg(e); cfgDesenho = { x: Math.min(cfgIni.x, p.x), y: Math.min(cfgIni.y, p.y), w: Math.abs(p.x - cfgIni.x), h: Math.abs(p.y - cfgIni.y) }; desenharCfg(); });
+const soltarCfg = async () => {
+  if (!cfgIni) return; const d = cfgDesenho; cfgIni = null; cfgDesenho = null;
+  if (!d || d.w < 0.02 || d.h < 0.02) return;
+  if (cfgModo === 'zona') { cfgCfg.zona = d; await salvarCfg({ zona: d }); }
+  else { cfgCfg.caixa = { w: d.w, h: d.h }; cfgCfg.caixa_pos = { x: d.x, y: d.y }; await salvarCfg({ caixa: cfgCfg.caixa, caixa_pos: cfgCfg.caixa_pos }); }
+  resumoCfg(); desenharCfg();
+};
+cfgCanvas.addEventListener('pointerup', soltarCfg); cfgCanvas.addEventListener('pointercancel', soltarCfg);
+async function salvarCfg(parcial) {
+  if (!cfgLinha) return;
+  try { const r = await API.put('/api/contador/linhas/' + cfgLinha.id + '/config', parcial); cfgCfg = { ...cfgCfg, ...r.config }; $('cfgStatus').textContent = 'Configuração enviada ao celular.'; }
+  catch (e) { avisoErro(e.message); }
+}
+const salvarCfgDebounce = parcial => { clearTimeout(cfgSalvarT); cfgSalvarT = setTimeout(() => salvarCfg(parcial), 350); };
+$('cSens').oninput = e => { $('sensVal').textContent = e.target.value; salvarCfgDebounce({ sens: Number(e.target.value) }); };
+$('cMult').onchange = e => salvarCfg({ multiplas: e.target.checked });
+$('cCamera').onchange = e => salvarCfg({ camera: e.target.value });
+$('cRes').onchange = e => salvarCfg({ resolucao: e.target.value });
+$('cZoom').oninput = e => { $('zoomVal').textContent = Number(e.target.value).toFixed(1) + '×'; salvarCfgDebounce({ zoom: Number(e.target.value) }); };
+$('cLant').onchange = e => salvarCfg({ lanterna: e.target.checked });
+document.querySelectorAll('.cmds [data-cmd]').forEach(b => b.onclick = async () => {
+  if (!cfgLinha) return;
+  if (b.dataset.cmd === 'encerrar' && !confirm('Encerrar a câmera no celular?')) return;
+  try { await API.post('/api/contador/linhas/' + cfgLinha.id + '/comando', { tipo: b.dataset.cmd }); $('cfgStatus').textContent = 'Comando enviado: ' + b.textContent; } catch (e) { avisoErro(e.message); }
+});
 
 /* ───────── ANÁLISE ───────── */
-async function carregarFiltros() {
-  const cels = await API.get('/api/prod-celulas').catch(() => []);
-  const nomes = new Set(cels.map(c => c.nome)); linhasCache.forEach(l => nomes.add(l.celula));
-  $('aCelula').innerHTML = '<option value="">Todas</option>' + [...nomes].sort().map(n => `<option value="${escapar(n)}">${escapar(n)}</option>`).join('');
-  await carregarSessoesFiltro();
+function preencherLinhasAnalise() {
+  const atual = $('aLinha').value;
+  $('aLinha').innerHTML = '<option value="">Todas</option>' + linhasCache.map(l => `<option value="${l.id}">${escapar(l.nome || l.celula)}</option>`).join('');
+  $('aLinha').value = atual;
 }
 async function carregarSessoesFiltro() {
   const lista = await API.get('/api/cadenciador/sessoes?data=' + $('aData').value).catch(() => []);
@@ -182,13 +387,12 @@ const minutos = (a, b) => (new Date(b) - new Date(a)) / 60000;
 const hhmm = t => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
 async function analisar() {
-  const data = $('aData').value, celula = $('aCelula').value, sid = $('aSessao').value;
-  let r; try { r = await API.get(`/api/contador/analise?data=${data}&celula=${encodeURIComponent(celula)}${sid ? '&sessao_id=' + sid : ''}`); } catch (e) { return avisoErro(e.message); }
+  const data = $('aData').value, lid = $('aLinha').value, sid = $('aSessao').value;
+  let r; try { r = await API.get(`/api/contador/analise?data=${data}${lid ? '&linha_id=' + lid : ''}${sid ? '&sessao_id=' + sid : ''}`); } catch (e) { return avisoErro(e.message); }
   const ev = r.eventos, saidas = ev.filter(e => e.valor > 0), takt = r.sessao ? r.sessao.takt_min : null;
   const contado = ev.reduce((s, e) => s + e.valor, 0);
   const hojeStr = hojeISO(), agora = new Date().toTimeString().slice(0, 8);
   const ciclosAte = r.ciclos.filter(c => data < hojeStr || String(c.hora_prevista).slice(0, 8) <= agora);
-  // intervalos
   const ints = []; for (let i = 1; i < saidas.length; i++) ints.push(minutos(saidas[i - 1].ts, saidas[i].ts));
   const media = ints.length ? ints.reduce((a, b) => a + b, 0) / ints.length : null;
   const acima = takt ? ints.filter(i => i > takt * 1.05).length : 0;
@@ -200,7 +404,6 @@ async function analisar() {
     ['Pela câmera / manual', `${ev.filter(e => e.origem === 'ia').length} / ${ev.filter(e => e.origem.startsWith('manual')).length}`, '']
   ].map(k => `<div class="kpi"><b class="${k[2]}">${k[1]}</b><span>${k[0]}</span></div>`).join('');
 
-  // acumulado esperado × real (eixo de tempo)
   const tempo = (h) => { const [H, M, S] = String(h).slice(0, 8).split(':').map(Number); return new Date(`${data}T00:00:00`).getTime() + (H * 3600 + M * 60 + (S || 0)) * 1000; };
   const esperado = r.ciclos.map((c, i) => ({ x: tempo(c.hora_prevista), y: i + 1 }));
   let acc = 0; const real = ev.filter(e => e.valor !== 0).map(e => ({ x: new Date(e.ts).getTime(), y: (acc += e.valor) }));
@@ -210,16 +413,11 @@ async function analisar() {
       { label: 'Esperado (cadenciador)', data: esperado, borderColor: '#64748b', borderDash: [6, 4], pointRadius: 0, stepped: true, borderWidth: 2 },
       { label: 'Real (contado no pallet)', data: real, borderColor: '#35C95C', backgroundColor: 'rgba(53,201,92,.12)', fill: true, pointRadius: 2, stepped: true, borderWidth: 2.5 }
     ] }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'nearest', intersect: false }, scales: { x: { type: 'linear', ticks: { callback: fmtT, maxTicksLimit: 12 } }, y: { beginAtZero: true, title: { display: true, text: 'unidades' } } }, plugins: { tooltip: { callbacks: { title: it => fmtT(it[0].parsed.x) } } } } });
-
-  // intervalos × takt
   grafico('gInt', { type: 'bar', data: { labels: ints.map((_, i) => hhmm(saidas[i + 1].ts)), datasets: [
       { label: 'Intervalo (min)', data: ints.map(v => Math.round(v * 10) / 10), backgroundColor: ints.map(v => takt && v > takt * 1.05 ? '#dc2626' : '#35C95C') },
       ...(takt ? [{ label: 'Takt', type: 'line', data: ints.map(() => takt), borderColor: '#64748b', borderDash: [6, 4], pointRadius: 0, borderWidth: 2 }] : [])
     ] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'min' } } } } });
-
-  // por hora
-  const horas = {}; saidas.forEach(e => { const h = new Date(e.ts).getHours(); horas[h] = (horas[h] || 0) + e.valor; });
-  ev.filter(e => e.valor < 0).forEach(e => { const h = new Date(e.ts).getHours(); horas[h] = (horas[h] || 0) + e.valor; });
+  const horas = {}; ev.filter(e => e.valor !== 0).forEach(e => { const h = new Date(e.ts).getHours(); horas[h] = (horas[h] || 0) + e.valor; });
   const horasEsp = {}; r.ciclos.forEach(c => { const h = Number(String(c.hora_prevista).slice(0, 2)); horasEsp[h] = (horasEsp[h] || 0) + 1; });
   const hs = [...new Set([...Object.keys(horas), ...Object.keys(horasEsp)].map(Number))].sort((a, b) => a - b);
   grafico('gHora', { type: 'bar', data: { labels: hs.map(h => String(h).padStart(2, '0') + 'h'), datasets: [
@@ -227,7 +425,6 @@ async function analisar() {
       { label: 'Esperado', data: hs.map(h => horasEsp[h] || 0), backgroundColor: 'rgba(100,116,139,.45)' }
     ] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
 
-  // tabela
   const rot = { ia: ['Câmera', 'ia'], manual_mais: ['+1 manual', ''], manual_menos: ['−1 manual', 'menos'], troca_pallet: ['Troca de pallet', 'troca'], estorno: ['Estorno da câmera', 'menos'] };
   $('aQtd').textContent = ev.length + ' eventos';
   let ant = null;
@@ -237,14 +434,14 @@ async function analisar() {
     const xt = takt && intv !== '—' ? (parseFloat(intv) / takt).toFixed(2) + '×' : '—';
     return `<tr><td>${new Date(e.ts).toLocaleTimeString('pt-BR')}</td><td><span class="pill ${rot[e.origem][1]}">${rot[e.origem][0]}</span></td><td>${e.valor > 0 ? '+' : ''}${e.valor}</td><td class="${cls}">${intv}</td><td class="${cls}">${xt}</td><td>${e.mudanca_pct != null ? e.mudanca_pct + '%' : '—'}</td>
       <td>${e.tem_foto ? `<img src="/api/contador/eventos/${e.id}/foto" loading="lazy" onclick="ampliarFoto(this.src,'${escapar(e.celula)} · ${new Date(e.ts).toLocaleTimeString('pt-BR')}')">` : '—'}</td>
-      <td>${USU && USU.role !== 'pcp' ? `<button class="btn-x" onclick="excluirEvento(${e.id})">excluir</button>` : ''}</td></tr>`;
+      <td>${podeEditar() ? `<button class="btn-x" onclick="excluirEvento(${e.id})">excluir</button>` : ''}</td></tr>`;
   }).join('') || '<tr><td colspan="8" style="color:var(--t3)">Nenhum evento neste dia.</td></tr>';
 }
 async function excluirEvento(id) { if (!confirm('Excluir este evento da contagem?')) return; try { await API.del('/api/contador/eventos/' + id); analisar(); } catch (e) { avisoErro(e.message); } }
 $('aBuscar').onclick = analisar;
 $('aData').onchange = async () => { await carregarSessoesFiltro(); analisar(); };
-$('aCelula').onchange = analisar; $('aSessao').onchange = analisar;
-$('aExcel').onclick = () => { window.location.href = `/api/export/contador?data=${$('aData').value}&celula=${encodeURIComponent($('aCelula').value)}`; };
+$('aLinha').onchange = analisar; $('aSessao').onchange = analisar;
+$('aExcel').onclick = () => { const l = linhasCache.find(x => x.id === Number($('aLinha').value)); window.location.href = `/api/export/contador?data=${$('aData').value}&celula=${encodeURIComponent(l ? l.celula : '')}`; };
 
 /* ───────── HISTÓRICO ───────── */
 async function carregarHistorico() {
@@ -252,18 +449,19 @@ async function carregarHistorico() {
   $('hTab').innerHTML = h.map(l => {
     const at = l.total_ciclos ? Math.round(l.contagem / l.total_ciclos * 100) : null;
     return `<tr><td>${dataBR(l.data)}</td><td><strong>${escapar(l.celula)}</strong></td><td>${l.produto_nome ? escapar(l.produto_nome) + ' · ' + escapar(l.turno_nome) : '<span style="color:var(--t3)">sem cadenciador</span>'}</td><td>${l.takt_min != null ? l.takt_min + ' min' : '—'}</td><td>${l.total_ciclos || '—'}</td><td><strong>${l.contagem}</strong></td><td class="${at == null ? '' : at >= 100 ? 'ok' : 'ruim'}">${at != null ? at + '%' : '—'}</td><td>${l.ia}</td><td>${l.mais}</td><td>${l.menos}</td><td>${l.estornos}</td><td>${new Date(l.primeiro).toLocaleTimeString('pt-BR')}</td><td>${new Date(l.ultimo).toLocaleTimeString('pt-BR')}</td>
-      <td><button class="btn btn-fantasma btn-sm" onclick="abrirAnalise('${String(l.data).slice(0, 10)}','${escapar(l.celula)}',${l.sessao_id || 'null'})">Analisar</button></td></tr>`;
+      <td><button class="btn btn-fantasma btn-sm" onclick="abrirAnalise('${l.data}',${l.linha_id || 'null'},${l.sessao_id || 'null'})">Analisar</button></td></tr>`;
   }).join('') || '<tr><td colspan="14" style="color:var(--t3)">Ainda não há contagens.</td></tr>';
 }
-async function abrirAnalise(data, celula, sid) {
-  $('aData').value = data; await carregarSessoesFiltro(); $('aCelula').value = celula; $('aSessao').value = sid || '';
+async function abrirAnalise(data, lid, sid) {
+  $('aData').value = data; await carregarSessoesFiltro(); preencherLinhasAnalise(); $('aLinha').value = lid || ''; $('aSessao').value = sid || '';
   document.querySelector('.aba[data-aba="analise"]').click();
 }
 
 (async () => {
   USU = await montarTopo({ subtitulo: 'Contador por câmera — painel' });
+  if (ehAdmin()) $('btnNova').style.display = '';
   $('aData').value = hojeISO();
-  await atualizarLinhas(); await carregarFiltros();
+  await carregarCadastros(); await atualizarLinhas(); preencherLinhasAnalise(); carregarSessoesFiltro();
   setInterval(atualizarLinhas, 900);
 })();
 </script>

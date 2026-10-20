@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Contador — Décio</title>
+<title>Contador — câmera — Décio</title>
 <link rel="icon" href="/assets/logo-decio.png">
 <link rel="stylesheet" href="/css/decio.css">
 <style>
@@ -18,11 +18,11 @@ body { overscroll-behavior: none; }
 .setup p { color: var(--t3); font-size: 13px; margin-bottom: 18px; line-height: 1.5; }
 .campo { margin-bottom: 14px; }
 .rotulo { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--t3); margin-bottom: 6px; font-weight: 700; }
-.lista-sessao { display: grid; gap: 8px; max-height: 260px; overflow: auto; }
-.sessao-op { border: 1px solid var(--linha); border-radius: 10px; padding: 10px 12px; cursor: pointer; display: flex; justify-content: space-between; gap: 10px; align-items: center; font-size: 13px; }
-.sessao-op:hover { border-color: var(--linha-2); background: var(--hover); }
-.sessao-op.sel { border-color: var(--verde); background: var(--fade-suave); }
-.sessao-op small { color: var(--t3); }
+.lista-linhas { display: grid; gap: 8px; }
+.linha-op { border: 1px solid var(--linha); border-radius: 10px; padding: 12px; cursor: pointer; display: flex; justify-content: space-between; gap: 10px; align-items: center; font-size: 13px; }
+.linha-op:hover { border-color: var(--linha-2); background: var(--hover); }
+.linha-op.sel { border-color: var(--verde); background: var(--fade-suave); }
+.linha-op small { color: var(--t3); }
 .aviso-cam { background: var(--alerta-bg); border: 1px solid var(--alerta-bd); color: var(--alerta); padding: 10px 12px; border-radius: 10px; font-size: 12.5px; margin-bottom: 12px; display: none; }
 
 /* ── Câmera ── */
@@ -56,8 +56,7 @@ body { overscroll-behavior: none; }
 .ultimos { margin-top: 14px; display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
 .ultimos img { width: 64px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid var(--linha); flex: none; }
 .ultimos .m { width: 64px; height: 48px; border-radius: 6px; border: 1px dashed var(--linha); display: grid; place-items: center; font-size: 18px; flex: none; color: var(--t3); }
-.sens { margin-top: 12px; font-size: 12px; color: var(--t3); display: flex; align-items: center; gap: 8px; }
-.sens input { flex: 1; }
+.info { margin-top: 10px; font-size: 12px; color: var(--t3); line-height: 1.5; }
 .offline { display: none; background: var(--erro-bg); border: 1px solid var(--erro-bd); color: var(--erro); padding: 8px 12px; border-radius: 10px; font-size: 12px; margin-top: 10px; }
 .offline.on { display: block; }
 </style>
@@ -70,16 +69,12 @@ body { overscroll-behavior: none; }
   <!-- ══════ SETUP ══════ -->
   <section class="setup" id="setup">
     <p class="olho">Contador por câmera</p>
-    <h2>Em qual linha este celular vai ficar?</h2>
-    <p>Fixe o celular num suporte apontado para o pallet. A IA conta cada produto que for colocado nele e compara com o cadenciador.</p>
+    <h2>Conectar a câmera deste celular a uma linha</h2>
+    <p>Fixe o celular num suporte com a vista lateral do pallet. Depois de conectar, a área e a câmera são configuradas pelo PC, no painel do Contador.</p>
     <div class="aviso-cam" id="avisoCam"></div>
-    <div class="campo"><label class="rotulo" for="selCelula">Célula</label>
-      <select class="controle" id="selCelula"><option value="">Carregando…</option></select></div>
-    <div class="campo"><label class="rotulo">Sessão do cadenciador de hoje</label>
-      <div class="lista-sessao" id="listaSessao"><div class="ajuda">Escolha a célula.</div></div></div>
-    <div class="campo"><label class="rotulo" for="selCam">Câmera</label>
-      <select class="controle" id="selCam"><option value="">Padrão (traseira)</option></select></div>
-    <button class="btn btn-primario btn-lg btn-bloco" id="btnIniciar">Abrir câmera e começar</button>
+    <div class="campo"><span class="rotulo">Linha</span>
+      <div class="lista-linhas" id="listaLinhas"><div class="ajuda">Carregando…</div></div></div>
+    <button class="btn btn-primario btn-lg btn-bloco" id="btnIniciar">Conectar câmera</button>
   </section>
 
   <!-- ══════ CONTANDO ══════ -->
@@ -94,16 +89,16 @@ body { overscroll-behavior: none; }
           <span class="selo-hud" id="hudEstado">Aguardando</span>
           <span class="selo-hud" id="hudLive">● ao vivo</span>
         </div>
-        <div class="dica" id="dica">Arraste na imagem para marcar a área do pallet.</div>
+        <div class="dica" id="dica">Aguardando a área do pallet — configure pelo PC ou arraste aqui na imagem.</div>
       </div>
-      <div class="sens"><span>Sensibilidade</span><input type="range" id="sens" min="1" max="10" value="5"><span id="sensTxt">5</span></div>
       <div class="offline" id="offline">Sem conexão — as contagens ficam guardadas no celular e sobem quando a rede voltar.</div>
+      <div class="info" id="info"></div>
     </div>
 
     <aside>
       <div class="placar">
         <div class="num" id="contagem">0</div>
-        <div class="rot" id="rotCelula">—</div>
+        <div class="rot" id="rotLinha">—</div>
         <div class="comp">
           <div><b id="esperado">—</b><span>Esperado (cadenciador)</span></div>
           <div><b id="delta" class="delta">—</b><span>Diferença</span></div>
@@ -114,7 +109,6 @@ body { overscroll-behavior: none; }
           <button class="btn btn-fantasma btn-grande" id="btnMenos" title="Descontar 1 contado errado">−1</button>
         </div>
         <div class="acoes">
-          <button class="btn btn-fantasma btn-sm" id="btnArea">Marcar área</button>
           <button class="btn btn-fantasma btn-sm" id="btnPallet">Pallet trocado</button>
           <button class="btn btn-fantasma btn-sm" id="btnSair">Encerrar</button>
         </div>
@@ -128,28 +122,32 @@ body { overscroll-behavior: none; }
 <script src="/js/mediapipe/pose/pose.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════
-   CONTADOR POR CÂMERA
-   ─ A IA (MediaPipe Pose, rodando no próprio celular) detecta a pessoa.
-   ─ Enquanto há pessoa/movimento sobre a área do pallet, esperamos.
-   ─ Quando a área fica livre, comparamos com a referência (como o
-     pallet estava antes): mudou → +1 e a nova imagem vira referência;
-     não mudou → só alguém se inclinou; mudou quase tudo → troca de pallet.
-   ─ Cada contagem guarda uma miniatura como evidência.
+   CONTADOR POR CÂMERA — lado do celular
+   ─ Vista lateral do pallet: cada caixa colocada muda uma parte da área
+     marcada (onde antes era fundo, agora é caixa).
+   ─ A IA (MediaPipe Pose, no próprio celular) detecta a pessoa. Enquanto
+     há pessoa/movimento sobre a área, esperamos.
+   ─ Área livre e parada por ~3 s → compara com a referência: mudou pelo
+     menos uma fração de caixa → +1 (nova referência, foto de evidência);
+     mudou "muitas caixas" → troca de pallet; não mudou → nada.
+   ─ Toda a configuração vem do servidor (feita pelo PC) e é reaplicada
+     quando muda; comandos remotos chegam pelo mesmo canal.
    ═══════════════════════════════════════════════════════════════ */
 
 const PROC_W = 320, PROC_H = 240;   // resolução de análise
-const REF_W = 64, REF_H = 48;       // resolução da referência da área
+const REF_W = 96, REF_H = 72;       // resolução da referência da área
 const ENVIO_MS = 700;               // quadro para o painel ao vivo
-let celula = '', sessao = null, stream = null, pose = null, iaOk = false;
-let zona = null;                    // {x,y,w,h} normalizado
-let ref = null;                     // Float32Array REF_W*REF_H (referência da área)
+const POLL_MS = 1500;               // config + comandos
+
+let linha = null, sessao = null, stream = null, pose = null, iaOk = false;
+let cfg = { zona: null, caixa: null, sens: 5, camera: '', zoom: null, lanterna: false, resolucao: 'media', multiplas: false }, cfgTs = null;
+let zona = null, ref = null, refAnterior = null;
 let estado = 'calibrando';          // calibrando | livre | ocupado | assentando | confirmando
-let refAnterior = null, ultimaContagemTs = 0, confirmandoDesde = 0;
-let ocupadoDesde = 0, livreDesde = 0, ultimoQuadro = null, pessoaBox = null;
+let ocupadoDesde = 0, livreDesde = 0, confirmandoDesde = 0, ultimaContagemTs = 0, ultimoQuadro = null, pessoaBox = null;
 let contagem = 0, eventosHoje = [], ultimosThumbs = [];
-let sensib = 5, pausado = false, ultimoEnvio = 0, ultimoPose = 0, posePronto = false, poseOcupado = false;
+let pausado = false, ultimoEnvio = 0, ultimoPose = 0, posePronto = false, poseOcupado = false;
 let fila = JSON.parse(localStorage.getItem('contador.fila') || '[]');
-let desenhando = null;
+let desenhando = null, capacidades = null, capEnviadas = false, zonaEditadaLocal = false;
 
 const $ = id => document.getElementById(id);
 const video = $('video'), sobre = $('sobre');
@@ -157,56 +155,72 @@ const proc = document.createElement('canvas'); proc.width = PROC_W; proc.height 
 const pctx = proc.getContext('2d', { willReadFrequently: true });
 const sctx = sobre.getContext('2d');
 const disp = (navigator.userAgent.match(/\((.*?)\)/) || [])[1] || 'celular';
+const RES = { baixa: { w: 640, h: 480 }, media: { w: 1280, h: 960 }, alta: { w: 1920, h: 1440 } };
 
 /* ───────── Setup ───────── */
 async function carregarSetup() {
-  const cels = await API.get('/api/prod-celulas').catch(() => []);
-  const sel = $('selCelula');
-  sel.innerHTML = '<option value="">Selecione…</option>' + cels.filter(c => c.ativa !== false).map(c => `<option value="${escapar(c.nome)}">${escapar(c.nome)}${c.categoria ? ' — ' + escapar(c.categoria) : ''}</option>`).join('');
-  const salva = localStorage.getItem('contador.celula'); if (salva) { sel.value = salva; carregarSessoes(); }
-  sel.onchange = () => { localStorage.setItem('contador.celula', sel.value); carregarSessoes(); };
-  try {
-    const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
-    $('selCam').innerHTML = '<option value="">Padrão (traseira)</option>' + devs.map((d, i) => `<option value="${d.deviceId}">${escapar(d.label || 'Câmera ' + (i + 1))}</option>`).join('');
-  } catch (_) {}
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('avisoCam').style.display = 'block'; $('avisoCam').textContent = 'Este navegador não dá acesso à câmera. Use o Chrome no Android, em HTTPS.'; }
-}
-async function carregarSessoes() {
-  const el = $('listaSessao'); el.innerHTML = '<div class="ajuda">Carregando…</div>';
-  const lista = await API.get('/api/cadenciador/sessoes').catch(() => []);
-  const prods = await API.get('/api/cadenciador/produtos').catch(() => []);
-  const cel = $('selCelula').value;
-  const ordenada = lista.slice().sort((a, b) => {
-    const pa = prods.find(p => p.nome === a.produto_nome), pb = prods.find(p => p.nome === b.produto_nome);
-    const ca = pa && pa.celula_nome === cel ? 0 : 1, cb = pb && pb.celula_nome === cel ? 0 : 1;
-    return ca - cb || a.produto_nome.localeCompare(b.produto_nome);
-  });
-  if (!ordenada.length) { el.innerHTML = '<div class="ajuda">Nenhuma sessão do cadenciador hoje. Pode contar mesmo assim (sem comparação com o takt).</div>'; sessao = null; return; }
-  el.innerHTML = ordenada.map(s => `<div class="sessao-op" data-id="${s.id}"><div><strong>${escapar(s.produto_nome)}</strong><br><small>${escapar(s.turno_nome)} · takt ${s.takt_min} min · ${s.ciclos_ok}/${s.total_ciclos} ciclos</small></div><span class="selo ${s.status === 'aberta' ? 'selo-ok' : 'selo-neutro'}">${s.status}</span></div>`).join('') +
-    '<div class="sessao-op" data-id=""><small>Sem cadenciador — só contar</small></div>';
-  el.querySelectorAll('.sessao-op').forEach(op => op.onclick = () => { el.querySelectorAll('.sessao-op').forEach(o => o.classList.remove('sel')); op.classList.add('sel'); sessao = op.dataset.id ? ordenada.find(s => String(s.id) === op.dataset.id) : null; });
-  const prim = el.querySelector('.sessao-op'); prim.classList.add('sel'); sessao = ordenada[0];
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('avisoCam').style.display = 'block'; $('avisoCam').textContent = 'Este navegador não dá acesso à câmera. Use o Chrome no Android, pelo endereço HTTPS do sistema.'; }
+  const linhas = await API.get('/api/contador/linhas').catch(() => []);
+  const el = $('listaLinhas');
+  if (!linhas.length) { el.innerHTML = '<div class="ajuda">Nenhuma linha criada. No PC, abra o painel do Contador e clique em <b>Nova linha</b> (célula + produto).</div>'; return; }
+  const pedida = Number(new URLSearchParams(location.search).get('linha')) || Number(localStorage.getItem('contador.linha')) || 0;
+  el.innerHTML = linhas.map(l => `<div class="linha-op${l.id === pedida ? ' sel' : ''}" data-id="${l.id}"><div><strong>${escapar(l.nome || l.celula)}</strong><br><small>${escapar(l.celula)}${l.produto_nome ? ' · ' + escapar(l.produto_nome) : ''}${l.sessao ? ' · takt ' + l.sessao.takt_min + ' min' : ' · sem cadenciador hoje'}</small></div>${l.online ? '<span class="selo selo-ok">câmera ligada</span>' : ''}</div>`).join('');
+  el.querySelectorAll('.linha-op').forEach(op => op.onclick = () => { el.querySelectorAll('.linha-op').forEach(o => o.classList.remove('sel')); op.classList.add('sel'); linha = linhas.find(l => l.id === Number(op.dataset.id)); });
+  linha = linhas.find(l => l.id === pedida) || null;
+  if (!linha && linhas.length === 1) { linha = linhas[0]; el.querySelector('.linha-op').classList.add('sel'); }
 }
 
-/* ───────── Câmera + IA ───────── */
-async function iniciar() {
-  celula = $('selCelula').value;
-  if (!celula) return avisoErro('Escolha a célula.');
-  const dev = $('selCam').value;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: dev ? { deviceId: { exact: dev }, width: { ideal: 1280 }, height: { ideal: 960 } } : { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false });
-  } catch (e) { return avisoErro('Não foi possível abrir a câmera: ' + e.message); }
+/* ───────── Câmera ───────── */
+async function abrirCamera() {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  const r = RES[cfg.resolucao] || RES.media;
+  const base = { width: { ideal: r.w }, height: { ideal: r.h } };
+  const tentativas = [];
+  if (cfg.camera) tentativas.push({ deviceId: { exact: cfg.camera }, ...base });
+  tentativas.push({ facingMode: { ideal: 'environment' }, ...base }, { ...base }, true);
+  let erro = null;
+  for (const v of tentativas) {
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: v, audio: false }); erro = null; break; } catch (e) { erro = e; }
+  }
+  if (erro) throw erro;
   video.srcObject = stream; await video.play().catch(() => {});
+  ref = null; estado = 'calibrando'; livreDesde = 0;
+  await lerCapacidades();
+  aplicarAjustesCamera();
+}
+async function lerCapacidades() {
+  const track = stream && stream.getVideoTracks()[0];
+  const caps = track && track.getCapabilities ? track.getCapabilities() : {};
+  const settings = track && track.getSettings ? track.getSettings() : {};
+  let cameras = [];
+  try { cameras = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput').map((d, i) => ({ id: d.deviceId, label: d.label || 'Câmera ' + (i + 1) })); } catch (_) {}
+  capacidades = { cameras, camera_atual: settings.deviceId || '', zoom: caps.zoom ? { min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step || 0.1, atual: settings.zoom } : null,
+    lanterna: !!caps.torch, largura: settings.width, altura: settings.height, ia: iaOk };
+  capEnviadas = false;
+}
+async function aplicarAjustesCamera() {
+  const track = stream && stream.getVideoTracks()[0]; if (!track || !track.applyConstraints) return;
+  const adv = [];
+  if (capacidades && capacidades.zoom && cfg.zoom != null) adv.push({ zoom: Math.min(capacidades.zoom.max, Math.max(capacidades.zoom.min, Number(cfg.zoom))) });
+  if (capacidades && capacidades.lanterna) adv.push({ torch: !!cfg.lanterna });
+  if (adv.length) { try { await track.applyConstraints({ advanced: adv }); } catch (e) { console.warn('ajuste câmera', e); } }
+}
+
+async function iniciar() {
+  if (!linha) return avisoErro('Escolha a linha.');
+  localStorage.setItem('contador.linha', linha.id);
+  try { await sincronizar(true); } catch (_) {}
+  try { await abrirCamera(); } catch (e) { return avisoErro('Não foi possível abrir a câmera: ' + e.message); }
   $('setup').style.display = 'none'; $('contando').style.display = '';
-  $('rotCelula').textContent = celula + (sessao ? ' · ' + sessao.produto_nome : '');
+  $('rotLinha').textContent = (linha.nome || linha.celula) + (linha.produto_nome ? ' · ' + linha.produto_nome : '');
   manterTelaLigada();
-  zona = JSON.parse(localStorage.getItem('contador.zona.' + celula) || 'null');
-  if (!zona) $('dica').textContent = 'Arraste na imagem para marcar a área do pallet.'; else $('dica').style.display = 'none';
+  aplicarConfig(cfg, true);
   await carregarEventosHoje();
   iniciarPose();
   requestAnimationFrame(loop);
   setInterval(enviarFila, 4000);
-  setInterval(atualizarEsperado, 15000);
+  setInterval(() => sincronizar(false).catch(() => {}), POLL_MS);
+  setInterval(() => atualizarEsperado(), 15000);
   atualizarEsperado();
 }
 function iniciarPose() {
@@ -221,8 +235,38 @@ function iniciarPose() {
       const xs = vis.map(l => l.x), ys = vis.map(l => l.y);
       pessoaBox = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
     });
-    pose.initialize().then(() => { posePronto = true; $('hudIa').textContent = 'IA: pronta'; }).catch(e => { console.warn('Pose', e); $('hudIa').textContent = 'IA indisponível — usando só movimento'; $('hudIa').className = 'selo-hud alerta'; pose = null; });
+    pose.initialize().then(() => { posePronto = true; iaOk = true; if (capacidades) capacidades.ia = true; capEnviadas = false; $('hudIa').textContent = 'IA: pronta'; })
+      .catch(e => { console.warn('Pose', e); $('hudIa').textContent = 'IA indisponível — usando só movimento'; $('hudIa').className = 'selo-hud alerta'; pose = null; });
   } catch (e) { $('hudIa').textContent = 'IA indisponível — usando só movimento'; $('hudIa').className = 'selo-hud alerta'; pose = null; }
+}
+
+/* ───────── Sincronização com o servidor (config + comandos) ───────── */
+async function sincronizar(primeira) {
+  const e = await API.get('/api/contador/linhas/' + linha.id + '/estado');
+  sessao = e.sessao; linha = { ...linha, ...e.linha };
+  if (primeira || e.config_ts !== cfgTs) { cfgTs = e.config_ts; aplicarConfig(e.config, primeira); }
+  if (!primeira && e.contagem !== contagem && !fila.length) { contagem = e.contagem; $('contagem').textContent = contagem; }
+  for (const c of e.comandos || []) executarComando(c);
+}
+function aplicarConfig(novo, primeira) {
+  const ant = cfg; cfg = { ...cfg, ...novo };
+  const zonaMudou = JSON.stringify(cfg.zona) !== JSON.stringify(zona);
+  if (zonaMudou && !zonaEditadaLocal) { zona = cfg.zona ? { ...cfg.zona } : null; ref = null; estado = 'calibrando'; livreDesde = 0; }
+  zonaEditadaLocal = false;
+  $('dica').style.display = zona ? 'none' : '';
+  if (!primeira && stream) {
+    if (cfg.camera !== ant.camera || cfg.resolucao !== ant.resolucao) abrirCamera().catch(e => avisoErro('Câmera: ' + e.message));
+    else if (cfg.zoom !== ant.zoom || cfg.lanterna !== ant.lanterna) aplicarAjustesCamera();
+  }
+  $('info').innerHTML = `Sensibilidade ${cfg.sens}/10${cfg.caixa ? ' · tamanho da caixa calibrado' : ' · <b>calibre o tamanho de uma caixa pelo PC</b>'}${cfg.multiplas ? ' · conta várias caixas por vez' : ''}`;
+}
+function executarComando(c) {
+  if (c.tipo === 'recalibrar') { ref = null; refAnterior = null; estado = 'calibrando'; livreDesde = 0; avisoOk('Recalibrando (comando do painel)'); }
+  else if (c.tipo === 'troca_pallet') { ref = null; refAnterior = null; estado = 'calibrando'; livreDesde = 0; registrar('troca_pallet', 0, null); }
+  else if (c.tipo === 'mais') registrar('manual_mais', 1, null);
+  else if (c.tipo === 'menos') { if (contagem > 0) registrar('manual_menos', -1, null); }
+  else if (c.tipo === 'reiniciar_camera') abrirCamera().catch(e => avisoErro('Câmera: ' + e.message));
+  else if (c.tipo === 'encerrar') { if (stream) stream.getTracks().forEach(t => t.stop()); location.href = '/contador'; }
 }
 
 /* ───────── Análise da área ───────── */
@@ -242,17 +286,28 @@ function amostraZona() {
   }
   return out;
 }
-/* fração de pixels que mudaram mais que `lim` e diferença média */
+/* fração de pixels que mudaram mais que `lim` */
 function comparar(a, b, lim) {
-  let mud = 0, soma = 0;
-  for (let i = 0; i < a.length; i++) { const d = Math.abs(a[i] - b[i]); soma += d; if (d > lim) mud++; }
-  return { frac: mud / a.length, media: soma / a.length };
+  let mud = 0;
+  for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > lim) mud++;
+  return { frac: mud / a.length };
 }
 function sobrepoe(bx) {   // pessoa cobre parte da área?
   if (!bx || !zona) return false;
   const ix = Math.max(0, Math.min(bx.x + bx.w, zona.x + zona.w) - Math.max(bx.x, zona.x));
   const iy = Math.max(0, Math.min(bx.y + bx.h, zona.y + zona.h) - Math.max(bx.y, zona.y));
   return ix * iy > 0.02 * zona.w * zona.h;
+}
+/* Limiares em "fração da área": se o tamanho de uma caixa foi calibrado, uma
+   contagem exige ~uma fração de caixa mudada; troca de pallet = muitas caixas. */
+function limiares() {
+  const s = cfg.sens || 5;
+  if (cfg.caixa && zona && zona.w * zona.h > 0) {
+    const caixa = (cfg.caixa.w * cfg.caixa.h) / (zona.w * zona.h);      // fração da área que uma caixa ocupa
+    const fator = 0.25 + (10 - s) * 0.07;                              // sens 10 → 25 % de uma caixa; sens 1 → 88 %
+    return { conta: Math.min(0.5, Math.max(0.006, caixa * fator)), troca: Math.min(0.95, Math.max(0.3, caixa * 5)), caixa };
+  }
+  return { conta: 0.02 + (10 - s) * 0.008, troca: 0.6, caixa: null };
 }
 
 let fps = 0, fpsT = 0, fpsN = 0;
@@ -271,11 +326,11 @@ async function loop(t) {
 }
 function analisar(t) {
   const atual = amostraZona();
-  const limMov = 18 + (10 - sensib) * 2;          // sensibilidade: 1 = pouco sensível, 10 = muito
-  const limMud = 0.035 + (10 - sensib) * 0.012;   // fração mínima da área que precisa mudar para contar
+  const L = limiares();
+  const limMov = 14 + (10 - (cfg.sens || 5)) * 2;
   const mov = ultimoQuadro ? comparar(atual, ultimoQuadro, limMov).frac : 0;
   ultimoQuadro = atual;
-  const presenca = mov > 0.02 || sobrepoe(pessoaBox);
+  const presenca = mov > 0.015 || sobrepoe(pessoaBox);
 
   if (estado === 'calibrando') {
     if (!presenca) { if (!livreDesde) livreDesde = t; if (t - livreDesde > 1500) { ref = atual; refAnterior = null; estado = 'livre'; livreDesde = 0; } }
@@ -287,24 +342,26 @@ function analisar(t) {
     livreDesde = 0;
     return;
   }
-  // sem presença
   if (estado === 'ocupado') { estado = 'assentando'; livreDesde = t; return; }
   if (estado === 'assentando') {
     if (t - livreDesde < 1200) return;   // espera a cena assentar
-    const r = comparar(atual, ref, 22);
-    if (r.frac > limMud) { estado = 'confirmando'; confirmandoDesde = t; }   // algo mudou: confirma que ficou assim
+    if (comparar(atual, ref, 18).frac > L.conta) { estado = 'confirmando'; confirmandoDesde = t; }   // algo mudou: confirma que ficou assim
     else estado = 'livre';
     return;
   }
   if (estado === 'confirmando') {
     // a área precisa continuar livre e mudada por mais 2 s — evita contar alguém que só parou em frente ao pallet
     if (t - confirmandoDesde < 2000) return;
-    const r = comparar(atual, ref, 22);
-    if (r.frac > 0.80) { refAnterior = ref; ref = atual; registrar('troca_pallet', 0, r.frac); }
-    else if (r.frac > limMud) {
+    const r = comparar(atual, ref, 18);
+    if (r.frac > L.troca) { refAnterior = ref; ref = atual; registrar('troca_pallet', 0, r.frac); }
+    else if (r.frac > L.conta) {
       // voltou a ficar igual a como estava antes da última contagem? então aquela contagem foi uma pessoa parada, não um produto
-      if (refAnterior && t - ultimaContagemTs < 20000 && comparar(atual, refAnterior, 22).frac <= limMud) { ref = refAnterior; refAnterior = null; registrar('estorno', -1, r.frac); }
-      else { refAnterior = ref; ref = atual; ultimaContagemTs = t; registrar('ia', 1, r.frac); }
+      if (refAnterior && t - ultimaContagemTs < 20000 && comparar(atual, refAnterior, 18).frac <= L.conta) { ref = refAnterior; refAnterior = null; registrar('estorno', -1, r.frac); }
+      else {
+        let n = 1;
+        if (cfg.multiplas && L.caixa) n = Math.min(4, Math.max(1, Math.round(r.frac / L.caixa)));
+        refAnterior = ref; ref = atual; ultimaContagemTs = t; registrar('ia', n, r.frac);
+      }
     }
     estado = 'livre';
     return;
@@ -320,12 +377,12 @@ function miniatura() {
   if (zona) { cx.strokeStyle = '#35C95C'; cx.lineWidth = 2; cx.strokeRect(zona.x * 320, zona.y * 240, zona.w * 320, zona.h * 240); }
   return c.toDataURL('image/jpeg', 0.6);
 }
-async function registrar(origem, valor, frac) {
-  const ev = { celula, sessao_id: sessao ? sessao.id : null, origem, ts: new Date().toISOString(), mudanca_pct: frac != null ? Math.round(frac * 1000) / 10 : null, foto: miniatura(), dispositivo: disp };
+function registrar(origem, valor, frac) {
+  const ev = { linha_id: linha.id, sessao_id: sessao ? sessao.id : null, origem, valor: Math.abs(valor) || undefined, ts: new Date().toISOString(), mudanca_pct: frac != null ? Math.round(frac * 1000) / 10 : null, foto: miniatura(), dispositivo: disp };
   if (valor) { contagem += valor; $('contagem').textContent = contagem; flash(); }
   eventosHoje.push({ ts: ev.ts, valor });
   ultimosThumbs.unshift({ src: ev.foto, origem }); ultimosThumbs = ultimosThumbs.slice(0, 6); renderUltimos();
-  atualizarEsperado(false);
+  atualizarEsperado();
   fila.push(ev); salvarFila(); enviarFila();
 }
 function flash() { const f = $('flash'); f.classList.add('on'); setTimeout(() => f.classList.remove('on'), 250); if (navigator.vibrate) navigator.vibrate(60); }
@@ -340,10 +397,10 @@ async function enviarFila() {
   enviando = false;
 }
 async function carregarEventosHoje() {
-  const hoje = hojeISO();
-  const lista = await API.get(`/api/contador/eventos?data=${hoje}&celula=${encodeURIComponent(celula)}${sessao ? '&sessao_id=' + sessao.id : ''}`).catch(() => []);
+  const lista = await API.get(`/api/contador/eventos?data=${hojeISO()}&linha_id=${linha.id}`).catch(() => []);
   eventosHoje = lista.map(e => ({ ts: e.ts, valor: e.valor }));
-  contagem = eventosHoje.reduce((s, e) => s + e.valor, 0) + fila.filter(f => f.celula === celula).reduce((s, f) => s + ((f.origem === 'manual_menos' || f.origem === 'estorno') ? -1 : f.origem === 'troca_pallet' ? 0 : 1), 0);
+  const vFila = f => f.origem === 'manual_menos' || f.origem === 'estorno' ? -1 : f.origem === 'troca_pallet' ? 0 : (f.valor || 1);
+  contagem = eventosHoje.reduce((s, e) => s + e.valor, 0) + fila.filter(f => f.linha_id === linha.id).reduce((s, f) => s + vFila(f), 0);
   $('contagem').textContent = contagem;
 }
 function renderUltimos() {
@@ -351,23 +408,16 @@ function renderUltimos() {
 }
 
 /* ───────── Esperado × real ───────── */
-let sessaoFull = null;
-async function atualizarEsperado(buscar = true) {
-  if (!sessao) { $('esperado').textContent = '—'; $('delta').textContent = '—'; $('ritmo').textContent = 'Sem cadenciador nesta sessão.'; return; }
-  if (buscar || !sessaoFull) sessaoFull = await API.get('/api/cadenciador/sessoes/' + sessao.id).catch(() => sessaoFull);
-  if (!sessaoFull) return;
-  const agora = new Date().toTimeString().slice(0, 8);
-  const esperado = sessaoFull.ciclos.filter(c => String(c.hora_prevista).slice(0, 8) <= agora).length;
-  const d = contagem - esperado;
-  $('esperado').textContent = esperado;
+function atualizarEsperado() {
+  if (!sessao) { $('esperado').textContent = '—'; $('delta').textContent = '—'; $('delta').className = 'delta'; $('ritmo').textContent = linha.takt_padrao ? `Takt padrão ${linha.takt_padrao} min · abra a sessão no cadenciador para comparar` : 'Sem cadenciador nesta linha.'; return; }
+  const d = contagem - sessao.esperado;
+  $('esperado').textContent = sessao.esperado;
   const el = $('delta'); el.textContent = (d > 0 ? '+' : '') + d; el.className = 'delta ' + (d >= 0 ? 'ok' : 'ruim');
-  // ritmo: intervalo da última saída × takt
   const saidas = eventosHoje.filter(e => e.valor > 0).map(e => new Date(e.ts)).sort((a, b) => a - b);
   if (saidas.length >= 2) {
-    const int = (saidas[saidas.length - 1] - saidas[saidas.length - 2]) / 60000;
-    const takt = sessaoFull.takt_min;
+    const int = (saidas[saidas.length - 1] - saidas[saidas.length - 2]) / 60000, takt = sessao.takt_min;
     $('ritmo').innerHTML = `Última saída: <strong>${int.toFixed(1)} min</strong> · takt ${takt} min ${int <= takt * 1.05 ? '<span style="color:var(--ok)">✓ no ritmo</span>' : '<span style="color:var(--erro)">⚠ ' + Math.round((int / takt - 1) * 100) + '% acima</span>'}`;
-  } else $('ritmo').textContent = 'Takt ' + sessaoFull.takt_min + ' min · aguardando as primeiras saídas';
+  } else $('ritmo').textContent = 'Takt ' + sessao.takt_min + ' min · aguardando as primeiras saídas';
 }
 
 /* ───────── Desenho da sobreposição ───────── */
@@ -386,25 +436,31 @@ function desenhar() {
     sctx.strokeRect(mapX(z.x), mapY(z.y), z.w / sw * W, z.h / sh * H);
     sctx.setLineDash([]);
     sctx.fillStyle = 'rgba(53,201,92,.08)'; sctx.fillRect(mapX(z.x), mapY(z.y), z.w / sw * W, z.h / sh * H);
+    if (cfg.caixa) { sctx.strokeStyle = 'rgba(255,255,255,.7)'; sctx.lineWidth = 1.5; sctx.setLineDash([4, 3]); sctx.strokeRect(mapX(z.x) + 6, mapY(z.y + z.h) - cfg.caixa.h / sh * H - 6, cfg.caixa.w / sw * W, cfg.caixa.h / sh * H); sctx.setLineDash([]); }
   }
   if (pessoaBox) { sctx.strokeStyle = 'rgba(86,182,224,.9)'; sctx.lineWidth = 2; sctx.strokeRect(mapX(pessoaBox.x), mapY(pessoaBox.y), pessoaBox.w / sw * W, pessoaBox.h / sh * H); }
   const nomes = { calibrando: 'Calibrando — saia da frente do pallet', livre: 'Livre', ocupado: 'Pessoa no pallet', assentando: 'Conferindo…', confirmando: 'Confirmando…' };
-  const h = $('hudEstado'); h.textContent = (pausado ? 'PAUSADO · ' : '') + (zona ? nomes[estado] : 'Marque a área') + ' · ' + fps + ' fps';
+  const h = $('hudEstado'); h.textContent = (pausado ? 'PAUSADO · ' : '') + (zona ? nomes[estado] : 'Sem área marcada') + ' · ' + fps + ' fps';
   h.className = 'selo-hud ' + (estado === 'ocupado' ? 'alerta' : estado === 'livre' ? 'on' : '');
-  // guarda o mapeamento para o toque
   desenhar.map = { sx, sy, sw, sh, W, H };
 }
-/* marcar a área arrastando */
+/* marcar a área arrastando no próprio celular (também salva no servidor) */
 function toqueParaNorm(e) {
-  const r = sobre.getBoundingClientRect(); const m = desenhar.map || { sx: 0, sy: 0, sw: 1, sh: 1, W: r.width, H: r.height };
-  const p = e.touches ? e.touches[0] : e;
-  return { x: Math.min(1, Math.max(0, (p.clientX - r.left) / r.width * m.sw + m.sx)), y: Math.min(1, Math.max(0, (p.clientY - r.top) / r.height * m.sh + m.sy)) };
+  const r = sobre.getBoundingClientRect(); const m = desenhar.map || { sx: 0, sy: 0, sw: 1, sh: 1 };
+  return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width * m.sw + m.sx)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height * m.sh + m.sy)) };
 }
 let ini = null;
-const comecar = e => { if (e.cancelable) e.preventDefault(); try { sobre.setPointerCapture(e.pointerId); } catch (_) {} ini = toqueParaNorm(e); desenhando = { x: ini.x, y: ini.y, w: 0, h: 0 }; };
-const mover = e => { if (!ini) return; if (e.cancelable) e.preventDefault(); const p = toqueParaNorm(e); desenhando = { x: Math.min(ini.x, p.x), y: Math.min(ini.y, p.y), w: Math.abs(p.x - ini.x), h: Math.abs(p.y - ini.y) }; };
-const soltar = e => { if (!ini) return; if (desenhando && desenhando.w > 0.05 && desenhando.h > 0.05) { zona = desenhando; localStorage.setItem('contador.zona.' + celula, JSON.stringify(zona)); ref = null; estado = 'calibrando'; livreDesde = 0; $('dica').style.display = 'none'; avisoOk('Área marcada. Calibrando…'); } ini = null; desenhando = null; };
-sobre.addEventListener('pointerdown', comecar); sobre.addEventListener('pointermove', mover); sobre.addEventListener('pointerup', soltar); sobre.addEventListener('pointercancel', soltar);
+sobre.addEventListener('pointerdown', e => { if (e.cancelable) e.preventDefault(); try { sobre.setPointerCapture(e.pointerId); } catch (_) {} ini = toqueParaNorm(e); desenhando = { x: ini.x, y: ini.y, w: 0, h: 0 }; });
+sobre.addEventListener('pointermove', e => { if (!ini) return; if (e.cancelable) e.preventDefault(); const p = toqueParaNorm(e); desenhando = { x: Math.min(ini.x, p.x), y: Math.min(ini.y, p.y), w: Math.abs(p.x - ini.x), h: Math.abs(p.y - ini.y) }; });
+const soltar = async () => {
+  if (!ini) return;
+  if (desenhando && desenhando.w > 0.05 && desenhando.h > 0.05) {
+    zona = desenhando; ref = null; estado = 'calibrando'; livreDesde = 0; $('dica').style.display = 'none'; zonaEditadaLocal = true;
+    try { const r = await API.put('/api/contador/linhas/' + linha.id + '/config', { zona }); cfg.zona = r.config.zona; cfgTs = r.updated_at; avisoOk('Área marcada. Calibrando…'); } catch (e) { avisoErro(e.message); }
+  }
+  ini = null; desenhando = null;
+};
+sobre.addEventListener('pointerup', soltar); sobre.addEventListener('pointercancel', soltar);
 
 /* ───────── Ao vivo (quadro para o painel) ───────── */
 const envio = document.createElement('canvas'); envio.width = 480; envio.height = 360;
@@ -414,11 +470,15 @@ async function enviarQuadro() {
   if (enviandoQuadro || !video.videoWidth) return; enviandoQuadro = true;
   try {
     ectx.drawImage(video, 0, 0, 480, 360);
-    if (zona) { ectx.strokeStyle = estado === 'ocupado' ? '#F0B429' : '#35C95C'; ectx.lineWidth = 3; ectx.strokeRect(zona.x * 480, zona.y * 360, zona.w * 480, zona.h * 360); }
-    ectx.fillStyle = 'rgba(10,22,32,.7)'; ectx.fillRect(0, 0, 480, 28);
-    ectx.fillStyle = '#fff'; ectx.font = 'bold 15px sans-serif'; ectx.fillText(`${celula}  ·  ${contagem} un  ·  ${new Date().toLocaleTimeString('pt-BR')}`, 10, 19);
-    await fetch('/api/contador/frame', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ celula, sessao_id: sessao ? sessao.id : null, contagem, estado, dispositivo: disp, jpeg: envio.toDataURL('image/jpeg', 0.55) }) });
-    $('hudLive').className = 'selo-hud on';
+    if (zona) { ectx.strokeStyle = estado === 'ocupado' ? 'rgba(240,180,41,.9)' : 'rgba(53,201,92,.9)'; ectx.lineWidth = 2; ectx.strokeRect(zona.x * 480, zona.y * 360, zona.w * 480, zona.h * 360); }
+    ectx.fillStyle = 'rgba(10,22,32,.7)'; ectx.fillRect(0, 0, 480, 26);
+    ectx.fillStyle = '#fff'; ectx.font = 'bold 14px sans-serif'; ectx.fillText(`${linha.nome || linha.celula}  ·  ${contagem} un  ·  ${new Date().toLocaleTimeString('pt-BR')}`, 10, 18);
+    const body = { linha_id: linha.id, contagem, estado, dispositivo: disp, jpeg: envio.toDataURL('image/jpeg', 0.55) };
+    if (capacidades && !capEnviadas) { body.capacidades = capacidades; }
+    const r = await fetch('/api/contador/frame', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (r.status === 401) location.href = '/login';
+    if (r.ok) { capEnviadas = true; const j = await r.json().catch(() => ({})); if (j.comandos) sincronizar(false).catch(() => {}); }
+    $('hudLive').className = 'selo-hud ' + (r.ok ? 'on' : 'erro');
   } catch (_) { $('hudLive').className = 'selo-hud erro'; }
   enviandoQuadro = false;
 }
@@ -427,10 +487,8 @@ async function enviarQuadro() {
 $('btnIniciar').onclick = iniciar;
 $('btnMais').onclick = () => registrar('manual_mais', 1, null);
 $('btnMenos').onclick = () => { if (contagem <= 0) return; registrar('manual_menos', -1, null); };
-$('btnPallet').onclick = () => { ref = null; estado = 'calibrando'; livreDesde = 0; registrar('troca_pallet', 0, null); avisoOk('Referência zerada. Saia da frente do pallet por 2 s.'); };
-$('btnArea').onclick = () => { zona = null; $('dica').style.display = ''; $('dica').textContent = 'Arraste na imagem para marcar a área do pallet.'; };
-$('btnSair').onclick = () => { if (!confirm('Encerrar a contagem neste celular?')) return; if (stream) stream.getTracks().forEach(t => t.stop()); location.reload(); };
-$('sens').oninput = e => { sensib = Number(e.target.value); $('sensTxt').textContent = sensib; };
+$('btnPallet').onclick = () => { ref = null; refAnterior = null; estado = 'calibrando'; livreDesde = 0; registrar('troca_pallet', 0, null); avisoOk('Referência zerada. Saia da frente do pallet por 2 s.'); };
+$('btnSair').onclick = () => { if (!confirm('Encerrar a câmera neste celular?')) return; if (stream) stream.getTracks().forEach(t => t.stop()); location.href = '/contador'; };
 document.addEventListener('visibilitychange', () => { pausado = document.hidden; });
 
 (async () => { await montarTopo({ subtitulo: 'Contador por câmera' }); carregarSetup(); })();
