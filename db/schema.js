@@ -585,6 +585,18 @@ CREATE TABLE IF NOT EXISTS cont_linhas (
   updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_cont_linhas_celula ON cont_linhas(celula);
+
+/* Ajustes da câmera que dependem do produto (tamanho da caixa, sensibilidade,
+   várias por vez). A área do pallet, câmera e zoom ficam na linha, porque o
+   pallet e a posição do aparelho são os mesmos para todos os produtos. */
+CREATE TABLE IF NOT EXISTS cont_linha_produto (
+  id            SERIAL PRIMARY KEY,
+  linha_id      INTEGER NOT NULL REFERENCES cont_linhas(id) ON DELETE CASCADE,
+  produto_id    INTEGER NOT NULL REFERENCES cad_produtos(id) ON DELETE CASCADE,
+  config        JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at    TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (linha_id, produto_id)
+);
 CREATE INDEX IF NOT EXISTS idx_cont_ev_sessao ON cont_eventos(sessao_id);
 
 /* ══════════════ LIMPEZA (itens com frequência + agenda por colaborador) ══════════════ */

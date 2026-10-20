@@ -512,7 +512,7 @@ router.get('/:modulo', requireAuth, async (req, res) => {
            FROM cont_eventos e LEFT JOIN users u ON u.id = e.usuario_id
            LEFT JOIN cad_sessoes s ON s.id = e.sessao_id LEFT JOIN cad_produtos p ON p.id = s.produto_id LEFT JOIN turnos t ON t.id = s.turno_id
           ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY e.celula, e.ts`, params)).rows;
-      const ORIG = { ia:'Camera (IA)', manual_mais:'+1 manual', manual_menos:'-1 manual', troca_pallet:'Troca de pallet', estorno:'Estorno automatico' };
+      const ORIG = { ia:'Camera: colocada', ia_retirada:'Camera: retirada', manual_mais:'+1 manual', manual_menos:'-1 manual', troca_pallet:'Troca de pallet', estorno:'Estorno automatico' };
       let cel = null, acum = 0, ant = null;
       rows.forEach(r => {
         const dia = new Date(r.ts); const diaStr = dia.toLocaleDateString('pt-BR');

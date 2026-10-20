@@ -62,11 +62,28 @@ const SQL_LINHA = `
          p.nome AS produto_nome, p.cod_decio, p.takt_min::float AS takt_padrao, p.celula_id AS produto_celula_id
     FROM cont_linhas l LEFT JOIN cad_produtos p ON p.id = l.produto_id`;
 
-async function carregarLinha(id) {
+async function carregarLinha(id, produtoId) {
   const r = await pool.query(SQL_LINHA + ' WHERE l.id = $1', [id]);
   if (!r.rows[0]) return null;
-  const l = r.rows[0]; l.config = { ...CONFIG_PADRAO, ...(l.config || {}) };
+  const l = r.rows[0];
+  l.config_linha = { ...CONFIG_PADRAO, ...(l.config || {}) };
+  l.config_produto = {};
+  const pid = idOk(produtoId) ? Number(produtoId) : l.produto_id;
+  if (pid) {
+    const p = await pool.query('SELECT config, updated_at FROM cont_linha_produto WHERE linha_id = $1 AND produto_id = $2', [l.id, pid]);
+    if (p.rows[0]) { l.config_produto = p.rows[0].config || {}; if (p.rows[0].updated_at > l.updated_at) l.updated_at = p.rows[0].updated_at; }
+  }
+  l.config_produto_id = pid || null;
+  l.config = { ...l.config_linha, ...l.config_produto };   // o produto sobrepõe a linha
   return l;
+}
+async function sessaoPorId(id) {
+  const r = await pool.query(
+    `SELECT s.id, s.takt_min::float AS takt_min, s.status, s.produto_id, t.nome AS turno_nome, t.codigo AS turno_codigo,
+            (SELECT COUNT(*)::int FROM cad_ciclos c WHERE c.sessao_id = s.id) AS total_ciclos,
+            (SELECT COUNT(*)::int FROM cad_ciclos c WHERE c.sessao_id = s.id AND c.hora_prevista <= $2::time) AS esperado
+       FROM cad_sessoes s JOIN turnos t ON t.id = s.turno_id WHERE s.id = $1`, [id, agoraHMS()]);
+  return r.rows[0] || null;
 }
 /* Sessão do cadenciador de hoje para o produto da linha (prefere a aberta) */
 async function sessaoDeHoje(produtoId) {
@@ -88,33 +105,43 @@ router.get('/linhas', requireAuth, async (req, res) => {
     const data = dataOk(req.query.data) ? req.query.data : hoje();
     const linhas = (await pool.query(SQL_LINHA + ' WHERE l.ativa ORDER BY l.celula')).rows;
     const contagens = (await pool.query(
-      `SELECT linha_id, SUM(valor)::int AS contagem, MAX(ts) AS ultimo FROM cont_eventos WHERE ${diaLocal('ts', 1)} GROUP BY linha_id`, [data])).rows;
+      `SELECT linha_id, sessao_id, SUM(valor)::int AS contagem, MAX(ts) AS ultimo FROM cont_eventos WHERE ${diaLocal('ts', 1)} GROUP BY linha_id, sessao_id`, [data])).rows;
     const agora = Date.now();
+    const porProduto = (await pool.query('SELECT linha_id, produto_id, config FROM cont_linha_produto')).rows;
     for (const l of linhas) {
-      l.config = { ...CONFIG_PADRAO, ...(l.config || {}) };
       const q = QUADROS.get(l.id);
-      const c = contagens.find(x => x.linha_id === l.id) || {};
+      if (q && q.produto_id && q.produto_id !== l.produto_id) l.produto_id = q.produto_id;   // o tablet trocou de produto
+      const cp = porProduto.find(x => x.linha_id === l.id && x.produto_id === l.produto_id);
+      l.config_linha = { ...CONFIG_PADRAO, ...(l.config || {}) };
+      l.config_produto = cp ? cp.config : {};
+      l.config = { ...l.config_linha, ...l.config_produto };
+      l.produtos_configurados = porProduto.filter(x => x.linha_id === l.id).map(x => x.produto_id);
+      let c = {};
       l.online = !!q && agora - q.ts < VIVO_MS;
       l.frame_ts = q ? q.ts : null;
       l.estado = q ? q.estado : '';
       l.dispositivo = q ? q.dispositivo : null;
       l.usuario = q ? q.usuario : null;
       l.capacidades = q ? q.capacidades : null;
+      if (q && q.produto_id) { const pn = (await pool.query('SELECT nome FROM cad_produtos WHERE id = $1', [q.produto_id])).rows[0]; if (pn) l.produto_nome = pn.nome; }
+      l.sessao = q && q.sessao_id ? await sessaoPorId(q.sessao_id) : await sessaoDeHoje(l.produto_id);
+      // contagem da sessão em andamento; sem sessão, o total do dia da câmera
+      const doDia = contagens.filter(x => x.linha_id === l.id);
+      c = l.sessao ? (doDia.find(x => x.sessao_id === l.sessao.id) || {}) : { contagem: doDia.reduce((s, x) => s + x.contagem, 0), ultimo: doDia.map(x => x.ultimo).sort().pop() || null };
       l.contagem = c.contagem || 0;
       l.ultimo = c.ultimo || null;
-      l.sessao = await sessaoDeHoje(l.produto_id);
     }
     res.json(linhas);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.post('/linhas', requireAdmin, async (req, res) => {
+router.post('/linhas', requireAuth, naoPcp, async (req, res) => {
   try {
     const { celula, produto_id, nome } = req.body || {};
     if (!celula || !String(celula).trim()) return res.status(400).json({ error: 'Célula obrigatória' });
     const r = await pool.query(
       `INSERT INTO cont_linhas (celula, produto_id, nome) VALUES ($1, $2, $3)
-       ON CONFLICT (celula) DO UPDATE SET produto_id = EXCLUDED.produto_id, nome = EXCLUDED.nome, ativa = TRUE, updated_at = NOW()
+       ON CONFLICT (celula) DO UPDATE SET produto_id = COALESCE(EXCLUDED.produto_id, cont_linhas.produto_id), nome = COALESCE(EXCLUDED.nome, cont_linhas.nome), ativa = TRUE, updated_at = NOW()
        RETURNING id`,
       [String(celula).trim().slice(0, 80), idOk(produto_id) ? Number(produto_id) : null, nome ? String(nome).slice(0, 120) : null]);
     res.json(await carregarLinha(r.rows[0].id));
@@ -143,16 +170,40 @@ router.delete('/linhas/:id', requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+router.get('/linhas/:id/config', requireAuth, async (req, res) => {
+  try {
+    const l = await carregarLinha(req.params.id, req.query.produto_id);
+    if (!l) return res.status(404).json({ error: 'Linha não encontrada' });
+    res.json({ config: l.config, config_linha: l.config_linha, config_produto: l.config_produto, produto_id: l.config_produto_id, updated_at: l.updated_at });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 /* Configuração da câmera/área — feita do PC (ou do próprio celular) */
 router.put('/linhas/:id/config', requireAuth, naoPcp, async (req, res) => {
   try {
     if (!idOk(req.params.id)) return res.status(400).end();
     const novo = limparConfig(req.body);
-    const r = await pool.query(
-      `UPDATE cont_linhas SET config = config || $2::jsonb, updated_at = NOW() WHERE id = $1 RETURNING config, updated_at`,
-      [req.params.id, JSON.stringify(novo)]);
-    if (!r.rows[0]) return res.status(404).json({ error: 'Linha não encontrada' });
-    res.json({ config: { ...CONFIG_PADRAO, ...r.rows[0].config }, updated_at: r.rows[0].updated_at });
+    const pid = idOk(req.body && req.body.produto_id) ? Number(req.body.produto_id) : null;
+    if (pid) {
+      await pool.query(
+        `INSERT INTO cont_linha_produto (linha_id, produto_id, config) VALUES ($1, $2, $3::jsonb)
+         ON CONFLICT (linha_id, produto_id) DO UPDATE SET config = cont_linha_produto.config || EXCLUDED.config, updated_at = NOW()`,
+        [req.params.id, pid, JSON.stringify(novo)]);
+      await pool.query('UPDATE cont_linhas SET updated_at = NOW() WHERE id = $1', [req.params.id]);   // acorda o aparelho
+    } else {
+      const r = await pool.query(`UPDATE cont_linhas SET config = config || $2::jsonb, updated_at = NOW() WHERE id = $1 RETURNING id`, [req.params.id, JSON.stringify(novo)]);
+      if (!r.rows[0]) return res.status(404).json({ error: 'Linha não encontrada' });
+    }
+    const l = await carregarLinha(req.params.id, pid);
+    res.json({ config: l.config, config_linha: l.config_linha, config_produto: l.config_produto, updated_at: l.updated_at });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/linhas/:id/config/:produto', requireAuth, naoPcp, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM cont_linha_produto WHERE linha_id = $1 AND produto_id = $2', [req.params.id, req.params.produto]);
+    await pool.query('UPDATE cont_linhas SET updated_at = NOW() WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -171,14 +222,17 @@ router.post('/linhas/:id/comando', requireAuth, naoPcp, (req, res) => {
 /* O celular pergunta: config atual + sessão do cadenciador + comandos pendentes */
 router.get('/linhas/:id/estado', requireAuth, async (req, res) => {
   try {
-    const l = await carregarLinha(req.params.id);
+    const l = await carregarLinha(req.params.id, req.query.produto_id);
     if (!l || !l.ativa) return res.status(404).json({ error: 'Linha não encontrada' });
     const comandos = COMANDOS.get(l.id) || [];
     COMANDOS.set(l.id, []);
     const data = hoje();
-    const cont = (await pool.query(`SELECT COALESCE(SUM(valor), 0)::int AS c FROM cont_eventos WHERE linha_id = $1 AND ${diaLocal('ts', 2)}`, [l.id, data])).rows[0].c;
-    res.json({ linha: { id: l.id, celula: l.celula, nome: l.nome, produto_id: l.produto_id, produto_nome: l.produto_nome, takt_padrao: l.takt_padrao },
-      config: l.config, config_ts: l.updated_at, sessao: await sessaoDeHoje(l.produto_id), contagem: cont, comandos, agora: Date.now() });
+    const sessao = idOk(req.query.sessao_id) ? await sessaoPorId(req.query.sessao_id) : await sessaoDeHoje(l.config_produto_id);
+    const params = [l.id, data]; let where = `linha_id = $1 AND ${diaLocal('ts', 2)}`;
+    if (sessao) { params.push(sessao.id); where += ` AND sessao_id = $3`; }
+    const cont = (await pool.query(`SELECT COALESCE(SUM(valor), 0)::int AS c FROM cont_eventos WHERE ${where}`, params)).rows[0].c;
+    res.json({ linha: { id: l.id, celula: l.celula, nome: l.nome, produto_id: l.config_produto_id, produto_nome: l.produto_nome, takt_padrao: l.takt_padrao },
+      config: l.config, config_ts: l.updated_at, sessao, contagem: cont, comandos, agora: Date.now() });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -193,7 +247,7 @@ router.get('/linhas/:id/qr.svg', requireAuth, async (req, res) => {
 /* ───────── Ao vivo ───────── */
 
 router.post('/frame', requireAuth, (req, res) => {
-  const { linha_id, contagem, estado, dispositivo, jpeg, capacidades } = req.body || {};
+  const { linha_id, contagem, estado, dispositivo, jpeg, capacidades, produto_id, sessao_id } = req.body || {};
   if (!idOk(linha_id)) return res.status(400).json({ error: 'Linha obrigatória' });
   const buf = b64jpeg(jpeg);
   if (!buf) return res.status(400).json({ error: 'Quadro inválido' });
@@ -204,6 +258,7 @@ router.post('/frame', requireAuth, (req, res) => {
     buf, ts: Date.now(), contagem: Number(contagem) || 0,
     estado: String(estado || '').slice(0, 40), dispositivo: String(dispositivo || '').slice(0, 120),
     usuario: req.session.nome || req.session.username,
+    produto_id: idOk(produto_id) ? Number(produto_id) : null, sessao_id: idOk(sessao_id) ? Number(sessao_id) : null,
     capacidades: capacidades && typeof capacidades === 'object' ? capacidades : (ant.capacidades || null)
   });
   res.json({ ok: true, comandos: (COMANDOS.get(id) || []).length });
@@ -218,7 +273,7 @@ router.get('/frame/:linha', requireAuth, (req, res) => {
 
 /* ───────── Eventos ───────── */
 
-const ORIG = { ia: 1, manual_mais: 1, manual_menos: -1, troca_pallet: 0, estorno: -1 };   // estorno: a própria câmera desfez uma contagem
+const ORIG = { ia: 1, ia_retirada: -1, manual_mais: 1, manual_menos: -1, troca_pallet: 0, estorno: -1 };   // ia_retirada: caixa tirada do pallet; estorno: a câmera desfez uma contagem
 
 router.post('/eventos', requireAuth, naoPcp, async (req, res) => {
   try {
@@ -231,7 +286,7 @@ router.post('/eventos', requireAuth, naoPcp, async (req, res) => {
     let sid = idOk(sessao_id) ? Number(sessao_id) : null;
     if (!sid && linha) { const s = await sessaoDeHoje(linha.produto_id); sid = s ? s.id : null; }
     let v = ORIG[origem];
-    if (origem === 'ia' && idOk(valor)) v = Math.min(4, Math.max(1, Number(valor)));   // várias caixas de uma vez (opcional)
+    if ((origem === 'ia' || origem === 'ia_retirada') && idOk(valor)) v = ORIG[origem] * Math.min(4, Math.max(1, Number(valor)));   // várias caixas de uma vez
     let fotoBuf = b64jpeg(foto);
     if (fotoBuf && fotoBuf.length > FOTO_MAX) fotoBuf = null;
     const quando = ts && !isNaN(Date.parse(ts)) ? new Date(ts) : new Date();
@@ -311,7 +366,7 @@ router.get('/historico', requireAuth, async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT to_char((e.ts AT TIME ZONE '${FUSO}')::date, 'YYYY-MM-DD') AS data, e.linha_id, e.celula, e.sessao_id, SUM(e.valor)::int AS contagem,
-              COUNT(*) FILTER (WHERE e.origem='ia')::int AS ia, COUNT(*) FILTER (WHERE e.origem='manual_mais')::int AS mais,
+              COUNT(*) FILTER (WHERE e.origem='ia')::int AS ia, COUNT(*) FILTER (WHERE e.origem='ia_retirada')::int AS retiradas, COUNT(*) FILTER (WHERE e.origem='manual_mais')::int AS mais,
               COUNT(*) FILTER (WHERE e.origem='manual_menos')::int AS menos, COUNT(*) FILTER (WHERE e.origem='estorno')::int AS estornos,
               MIN(e.ts) AS primeiro, MAX(e.ts) AS ultimo,
               s.takt_min::float AS takt_min, p.nome AS produto_nome, t.nome AS turno_nome,

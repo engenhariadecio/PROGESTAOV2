@@ -94,13 +94,13 @@ td img { width: 72px; height: 54px; object-fit: cover; border-radius: 6px; curso
     <button class="aba ativa" data-aba="vivo">📡 Ao vivo <span class="n" id="nLinhas">0</span></button>
     <button class="aba" data-aba="analise">📈 Análise × takt</button>
     <button class="aba" data-aba="historico">🗂 Histórico</button>
-    <button class="btn btn-primario" id="btnNova" style="margin-left:auto;display:none">＋ Nova linha</button>
+    <button class="btn btn-primario" id="btnNova" style="margin-left:auto;display:none">＋ Câmera de célula</button>
   </div>
 
   <!-- ═══ AO VIVO ═══ -->
   <section class="painel ativo" id="p-vivo">
     <div class="linhas" id="linhas"></div>
-    <div class="vazio" id="semLinhas" style="display:none">Nenhuma linha criada.<br>Clique em <b>Nova linha</b>, escolha a célula e o produto do cadenciador; depois abra o link no celular e conecte a câmera.</div>
+    <div class="vazio" id="semLinhas" style="display:none">Nenhuma câmera de célula ainda.<br>No tablet da célula, abra o <b>Cadenciador</b>, escolha turno, célula, produto e "Câmera deste aparelho" e clique em <b>Iniciar linha</b> — a câmera aparece aqui. Ou clique em <b>＋ Câmera de célula</b> para criar e conectar um celular avulso.</div>
   </section>
 
   <!-- ═══ ANÁLISE ═══ -->
@@ -126,13 +126,13 @@ td img { width: 72px; height: 54px; object-fit: cover; border-radius: 6px; curso
   <!-- ═══ HISTÓRICO ═══ -->
   <section class="painel" id="p-historico">
     <div class="cartao"><h4>Dias e linhas com contagem</h4>
-      <div class="rolar" style="max-height:70vh"><table><thead><tr><th>Dia</th><th>Célula</th><th>Produto / turno</th><th>Takt</th><th>Previsto (ciclos)</th><th>Contado</th><th>Atendimento</th><th>Câmera</th><th>+1 manual</th><th>−1 manual</th><th>Estornos</th><th>Primeiro</th><th>Último</th><th></th></tr></thead><tbody id="hTab"></tbody></table></div></div>
+      <div class="rolar" style="max-height:70vh"><table><thead><tr><th>Dia</th><th>Célula</th><th>Produto / turno</th><th>Takt</th><th>Previsto (ciclos)</th><th>Contado</th><th>Atendimento</th><th>Colocadas (câmera)</th><th>Retiradas (câmera)</th><th>+1 manual</th><th>−1 manual</th><th>Estornos</th><th>Primeiro</th><th>Último</th><th></th></tr></thead><tbody id="hTab"></tbody></table></div></div>
   </section>
 </main>
 
 <!-- ═══ MODAL: nova linha / editar ═══ -->
 <div class="modal-fundo" id="mLinha"><div class="modal">
-  <div class="modal-topo"><div class="modal-titulo" id="mLinhaTit">Nova linha</div><button class="modal-fechar" onclick="fecharModal('mLinha')">×</button></div>
+  <div class="modal-topo"><div class="modal-titulo" id="mLinhaTit">Câmera de célula</div><button class="modal-fechar" onclick="fecharModal('mLinha')">×</button></div>
   <div class="modal-corpo" style="display:grid;gap:14px">
     <input type="hidden" id="lId">
     <div class="campo"><span class="rotulo">Célula</span><select class="controle" id="lCelula"></select></div>
@@ -159,15 +159,18 @@ td img { width: 72px; height: 54px; object-fit: cover; border-radius: 6px; curso
         <div class="palco"><img id="cfgImg" alt=""><div class="semimg" id="cfgSem">Aguardando a imagem do celular…</div><canvas id="cfgCanvas"></canvas></div>
         <div class="modo">
           <button class="btn btn-sm btn-fantasma sel" data-modo="zona">▭ Área do pallet</button>
-          <button class="btn btn-sm btn-fantasma" data-modo="caixa">▢ Tamanho de uma caixa</button>
+          <button class="btn btn-sm btn-fantasma" data-modo="caixa">▢ Tamanho de uma caixa (opcional)</button>
           <span class="ajuda" id="cfgDica" style="align-self:center">Arraste sobre a imagem para marcar a área onde as caixas ficam (toda a altura das pilhas).</span>
         </div>
         <div class="ajuda" id="cfgResumo"></div>
       </div>
       <div class="lado">
-        <div class="grupo"><h5>Detecção</h5>
+        <div class="grupo"><h5>Produto (tamanho da caixa, sensibilidade)</h5>
+          <div class="campo"><select class="controle" id="cProduto"></select></div>
+          <div class="ajuda" id="cProdutoAjuda"></div>
           <div class="campo"><span class="rotulo">Sensibilidade <span class="valor" id="sensVal">5</span></span><input type="range" id="cSens" min="1" max="10" step="1"></div>
-          <label class="lbl"><input type="checkbox" id="cMult"> Contar várias caixas colocadas de uma vez (usa o tamanho da caixa)</label>
+          <label class="lbl" style="display:none"><input type="checkbox" id="cMult"> (várias por vez — automático)</label>
+          <button class="btn btn-sm btn-fantasma" id="cLimparProduto">Voltar ao padrão da linha para este produto</button>
         </div>
         <div class="grupo"><h5>Câmera do celular</h5>
           <div class="campo"><span class="rotulo">Câmera</span><select class="controle" id="cCamera"><option value="">Traseira (padrão)</option></select></div>
@@ -266,7 +269,7 @@ $('lCelula').onchange = () => {   // sugere o produto cadastrado para a célula
   const cel = $('lCelula').value; if (!cel || $('lProduto').value) return;
   const p = produtos.find(x => x.celula_nome === cel); if (p) $('lProduto').value = p.id;
 };
-$('btnNova').onclick = () => { $('lId').value = ''; $('lCelula').value = ''; $('lProduto').value = ''; $('lNome').value = ''; $('mLinhaTit').textContent = 'Nova linha'; abrirModal('mLinha'); };
+$('btnNova').onclick = () => { $('lId').value = ''; $('lCelula').value = ''; $('lProduto').value = ''; $('lNome').value = ''; $('mLinhaTit').textContent = 'Câmera de célula'; abrirModal('mLinha'); };
 function editarLinha(id) { const l = linhasCache.find(x => x.id === id); if (!l) return; $('lId').value = id; $('lCelula').value = l.celula; $('lProduto').value = l.produto_id || ''; $('lNome').value = l.nome || ''; $('mLinhaTit').textContent = 'Editar linha'; abrirModal('mLinha'); }
 $('lSalvar').onclick = async () => {
   const body = { celula: $('lCelula').value, produto_id: $('lProduto').value || null, nome: $('lNome').value.trim() || null };
@@ -293,18 +296,37 @@ async function abrirSessao(id) {
 /* ───────── Configurar câmera (remoto) ───────── */
 let cfgLinha = null, cfgModo = 'zona', cfgCfg = {}, cfgDesenho = null, cfgIni = null, cfgTimer = null, cfgSalvarT = null;
 const cfgCanvas = $('cfgCanvas'), cctx = cfgCanvas.getContext('2d');
-function abrirCfg(id) {
+let cfgProduto = null;
+async function abrirCfg(id) {
   const l = linhasCache.find(x => x.id === id); if (!l) return;
-  cfgLinha = l; cfgCfg = { ...l.config };
+  cfgLinha = l; cfgProduto = l.produto_id || null;
+  $('cProduto').innerHTML = '<option value="">Padrão da linha (todos os produtos)</option>' + produtos.map(p => `<option value="${p.id}">${escapar(p.nome)}${l.produtos_configurados && l.produtos_configurados.includes(p.id) ? ' ✓' : ''}</option>`).join('');
+  $('cProduto').value = cfgProduto || '';
+  await carregarCfgProduto();
   $('cfgTit').textContent = 'Configurar câmera — ' + (l.nome || l.celula);
-  $('cSens').value = cfgCfg.sens || 5; $('sensVal').textContent = cfgCfg.sens || 5;
-  $('cMult').checked = !!cfgCfg.multiplas; $('cRes').value = cfgCfg.resolucao || 'media'; $('cLant').checked = !!cfgCfg.lanterna;
+  $('cRes').value = cfgCfg.resolucao || 'media'; $('cLant').checked = !!cfgCfg.lanterna;
   preencherCapacidades(l);
   $('cfgImg').removeAttribute('src'); $('cfgImg').dataset.ts = '';
   abrirModal('mCfg'); atualizarCfgVivo(); desenharCfg(); resumoCfg();
   cfgTimer = setInterval(desenharCfg, 300);
 }
 function fecharCfg() { fecharModal('mCfg'); cfgLinha = null; clearInterval(cfgTimer); }
+/* a config efetiva = linha ⊕ produto escolhido */
+async function carregarCfgProduto() {
+  const l = cfgLinha;
+  cfgCfg = { ...l.config_linha };
+  if (cfgProduto) {
+    try { const r = await API.get('/api/contador/linhas/' + l.id + '/config?produto_id=' + cfgProduto); cfgCfg = { ...r.config }; } catch (_) {}
+  }
+  $('cSens').value = cfgCfg.sens || 5; $('sensVal').textContent = cfgCfg.sens || 5; $('cMult').checked = !!cfgCfg.multiplas;
+  const p = produtos.find(x => x.id === cfgProduto);
+  $('cProdutoAjuda').textContent = cfgProduto ? `Tamanho da caixa, sensibilidade e "várias por vez" ficam salvos só para ${p ? p.nome : 'este produto'}. Área do pallet, câmera e zoom valem para a linha toda.` : 'Ajustes padrão da linha — usados pelos produtos sem configuração própria.';
+  $('cLimparProduto').style.display = cfgProduto ? '' : 'none';
+  resumoCfg(); desenharCfg();
+}
+$('cProduto').onchange = async () => { cfgProduto = Number($('cProduto').value) || null; await carregarCfgProduto(); };
+$('cLimparProduto').onclick = async () => { if (!cfgProduto || !confirm('Remover a configuração própria deste produto?')) return; try { await API.del(`/api/contador/linhas/${cfgLinha.id}/config/${cfgProduto}`); await carregarCfgProduto(); avisoOk('Produto voltou ao padrão da linha.'); } catch (e) { avisoErro(e.message); } };
+const POR_PRODUTO = ['caixa', 'caixa_pos', 'sens', 'multiplas'];
 function preencherCapacidades(l) {
   const cap = l.capacidades || {};
   const cams = cap.cameras || [];
@@ -318,8 +340,9 @@ function preencherCapacidades(l) {
 }
 function atualizarCfgVivo() {
   const l = linhasCache.find(x => x.id === cfgLinha.id); if (!l) return;
-  const capAntes = JSON.stringify(cfgLinha.capacidades), online = cfgLinha.online;
+  const capAntes = JSON.stringify(cfgLinha.capacidades), online = cfgLinha.online, prodAntes = cfgLinha.produto_id;
   cfgLinha = l;
+  if (l.produto_id !== prodAntes && l.produto_id) { cfgProduto = l.produto_id; $('cProduto').value = cfgProduto; carregarCfgProduto(); }   // o tablet trocou de produto
   if (JSON.stringify(l.capacidades) !== capAntes || online !== l.online) preencherCapacidades(l);
   $('cfgSem').style.display = l.online ? 'none' : '';
   $('cfgStatus').textContent = l.online ? `Ao vivo · ${({ calibrando: 'calibrando', livre: 'pallet livre', ocupado: 'pessoa no pallet', assentando: 'conferindo', confirmando: 'confirmando' })[l.estado] || l.estado} · contagem ${l.contagem}` : 'Sem imagem';
@@ -339,7 +362,7 @@ function resumoCfg() {
   const z = cfgCfg.zona, c = cfgCfg.caixa;
   let t = z ? `Área: ${Math.round(z.w * 100)}% × ${Math.round(z.h * 100)}% da imagem.` : 'Área do pallet ainda não marcada — o celular não conta sem ela.';
   if (z && c) { const n = (z.w * z.h) / (c.w * c.h); t += ` Cabem ~${Math.round(n)} caixas na área; uma caixa = ${(100 / n).toFixed(1)}% da área.`; }
-  else if (z) t += ' Marque também o tamanho de uma caixa para a contagem ficar mais precisa.';
+  else if (z) t += ' A câmera aprende o tamanho da caixa sozinha nas primeiras contagens; marcar é opcional.';
   $('cfgResumo').textContent = t;
 }
 document.querySelectorAll('.modo [data-modo]').forEach(b => b.onclick = () => { cfgModo = b.dataset.modo; document.querySelectorAll('.modo [data-modo]').forEach(x => x.classList.toggle('sel', x === b)); $('cfgDica').textContent = cfgModo === 'zona' ? 'Arraste sobre a imagem para marcar a área onde as caixas ficam (toda a altura das pilhas).' : 'Arraste sobre uma caixa já no pallet, do tamanho exato dela.'; });
@@ -356,7 +379,9 @@ const soltarCfg = async () => {
 cfgCanvas.addEventListener('pointerup', soltarCfg); cfgCanvas.addEventListener('pointercancel', soltarCfg);
 async function salvarCfg(parcial) {
   if (!cfgLinha) return;
-  try { const r = await API.put('/api/contador/linhas/' + cfgLinha.id + '/config', parcial); cfgCfg = { ...cfgCfg, ...r.config }; $('cfgStatus').textContent = 'Configuração enviada ao celular.'; }
+  const body = { ...parcial };
+  if (cfgProduto && Object.keys(parcial).every(k => POR_PRODUTO.includes(k))) body.produto_id = cfgProduto;
+  try { const r = await API.put('/api/contador/linhas/' + cfgLinha.id + '/config', body); cfgCfg = { ...cfgCfg, ...r.config }; $('cfgStatus').textContent = 'Configuração enviada ao aparelho.'; }
   catch (e) { avisoErro(e.message); }
 }
 const salvarCfgDebounce = parcial => { clearTimeout(cfgSalvarT); cfgSalvarT = setTimeout(() => salvarCfg(parcial), 350); };
@@ -401,7 +426,7 @@ async function analisar() {
     ['Diferença', r.ciclos.length ? ((contado - ciclosAte.length > 0 ? '+' : '') + (contado - ciclosAte.length)) : '—', r.ciclos.length ? (contado >= ciclosAte.length ? 'ok' : 'ruim') : ''],
     ['Takt (min)', takt != null ? takt : '—', ''], ['Intervalo médio (min)', media != null ? media.toFixed(1) : '—', takt && media ? (media <= takt * 1.05 ? 'ok' : 'ruim') : ''],
     ['Ritmo real', media ? (60 / media).toFixed(1) + ' un/h' : '—', ''], ['Saídas acima do takt', ints.length ? `${acima} de ${ints.length}` : '—', acima ? 'ruim' : ''],
-    ['Pela câmera / manual', `${ev.filter(e => e.origem === 'ia').length} / ${ev.filter(e => e.origem.startsWith('manual')).length}`, '']
+    ['Colocadas / retiradas (câmera)', `${ev.filter(e => e.origem === 'ia').reduce((s, e) => s + e.valor, 0)} / ${-ev.filter(e => e.origem === 'ia_retirada').reduce((s, e) => s + e.valor, 0)}`, ''], ['Manual +1 / −1', `${ev.filter(e => e.origem === 'manual_mais').length} / ${ev.filter(e => e.origem === 'manual_menos').length}`, '']
   ].map(k => `<div class="kpi"><b class="${k[2]}">${k[1]}</b><span>${k[0]}</span></div>`).join('');
 
   const tempo = (h) => { const [H, M, S] = String(h).slice(0, 8).split(':').map(Number); return new Date(`${data}T00:00:00`).getTime() + (H * 3600 + M * 60 + (S || 0)) * 1000; };
@@ -425,7 +450,7 @@ async function analisar() {
       { label: 'Esperado', data: hs.map(h => horasEsp[h] || 0), backgroundColor: 'rgba(100,116,139,.45)' }
     ] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
 
-  const rot = { ia: ['Câmera', 'ia'], manual_mais: ['+1 manual', ''], manual_menos: ['−1 manual', 'menos'], troca_pallet: ['Troca de pallet', 'troca'], estorno: ['Estorno da câmera', 'menos'] };
+  const rot = { ia: ['Câmera: colocada', 'ia'], ia_retirada: ['Câmera: retirada', 'menos'], manual_mais: ['+1 manual', ''], manual_menos: ['−1 manual', 'menos'], troca_pallet: ['Troca de pallet', 'troca'], estorno: ['Estorno da câmera', 'menos'] };
   $('aQtd').textContent = ev.length + ' eventos';
   let ant = null;
   $('aTab').innerHTML = ev.map(e => {
@@ -448,9 +473,9 @@ async function carregarHistorico() {
   let h; try { h = await API.get('/api/contador/historico'); } catch (e) { return avisoErro(e.message); }
   $('hTab').innerHTML = h.map(l => {
     const at = l.total_ciclos ? Math.round(l.contagem / l.total_ciclos * 100) : null;
-    return `<tr><td>${dataBR(l.data)}</td><td><strong>${escapar(l.celula)}</strong></td><td>${l.produto_nome ? escapar(l.produto_nome) + ' · ' + escapar(l.turno_nome) : '<span style="color:var(--t3)">sem cadenciador</span>'}</td><td>${l.takt_min != null ? l.takt_min + ' min' : '—'}</td><td>${l.total_ciclos || '—'}</td><td><strong>${l.contagem}</strong></td><td class="${at == null ? '' : at >= 100 ? 'ok' : 'ruim'}">${at != null ? at + '%' : '—'}</td><td>${l.ia}</td><td>${l.mais}</td><td>${l.menos}</td><td>${l.estornos}</td><td>${new Date(l.primeiro).toLocaleTimeString('pt-BR')}</td><td>${new Date(l.ultimo).toLocaleTimeString('pt-BR')}</td>
+    return `<tr><td>${dataBR(l.data)}</td><td><strong>${escapar(l.celula)}</strong></td><td>${l.produto_nome ? escapar(l.produto_nome) + ' · ' + escapar(l.turno_nome) : '<span style="color:var(--t3)">sem cadenciador</span>'}</td><td>${l.takt_min != null ? l.takt_min + ' min' : '—'}</td><td>${l.total_ciclos || '—'}</td><td><strong>${l.contagem}</strong></td><td class="${at == null ? '' : at >= 100 ? 'ok' : 'ruim'}">${at != null ? at + '%' : '—'}</td><td>${l.ia}</td><td>${l.retiradas}</td><td>${l.mais}</td><td>${l.menos}</td><td>${l.estornos}</td><td>${new Date(l.primeiro).toLocaleTimeString('pt-BR')}</td><td>${new Date(l.ultimo).toLocaleTimeString('pt-BR')}</td>
       <td><button class="btn btn-fantasma btn-sm" onclick="abrirAnalise('${l.data}',${l.linha_id || 'null'},${l.sessao_id || 'null'})">Analisar</button></td></tr>`;
-  }).join('') || '<tr><td colspan="14" style="color:var(--t3)">Ainda não há contagens.</td></tr>';
+  }).join('') || '<tr><td colspan="15" style="color:var(--t3)">Ainda não há contagens.</td></tr>';
 }
 async function abrirAnalise(data, lid, sid) {
   $('aData').value = data; await carregarSessoesFiltro(); preencherLinhasAnalise(); $('aLinha').value = lid || ''; $('aSessao').value = sid || '';
