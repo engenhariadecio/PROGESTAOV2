@@ -39,7 +39,7 @@ window.ContadorCam = (function () {
       contagem: 0, eventos: [], fila: [], pausado: false, ultimoEnvio: 0, ultimoPose: 0, posePronto: false, poseOcupado: false, iaOk: false,
       capacidades: null, capEnviadas: false, zonaEditadaLocal: false, desenhando: null, ativo: false, timers: [], fps: 0, fpsT: 0, fpsN: 0, raf: 0,
       tamanhos: [], fundo: null, caixaCor: null,
-      modelo: null, modeloId: null, modeloCarregando: false, dets: [], detOcupado: false, ultimaDet: 0, contEstavel: null, histCont: [], detErro: null
+      modelo: null, modeloId: null, modeloCarregando: false, dets: [], detOcupado: false, ultimaDet: 0, contEstavel: null, histCont: [], detErro: null, pallet: null, histPallet: [], probCom: null, areaAuto: null, palletBox: null, palletOk: null, contAtual: {}, temClassePallet: false, chaveEstavel: null, palletEstavel: null, maos: [], ultimaMao: null, ultimaPresenca: null, ajustes: 0
     };
     try { S.fila = JSON.parse(localStorage.getItem('contador.fila') || '[]'); } catch (_) {}
     const hud = (k, txt, cls) => { const el = o.hud && o.hud[k]; if (!el) return; if (txt != null) el.textContent = txt; if (cls != null) el.className = 'selo-hud ' + cls; };
@@ -76,21 +76,25 @@ window.ContadorCam = (function () {
       if (adv.length) { try { await track.applyConstraints({ advanced: adv }); } catch (e) { console.warn('ajuste câmera', e); } }
     }
     function iniciarPose() {
-      if (typeof Pose === 'undefined') { hud('ia', 'IA indisponível — usando só movimento', 'alerta'); return; }
+      if (typeof Pose === 'undefined') { if (!S.modelo) hud('ia', 'IA de pessoas indisponível — usando só movimento', 'alerta'); return; }
       try {
         S.pose = new Pose({ locateFile: f => '/js/mediapipe/pose/' + f });
         S.pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, enableSegmentation: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
         S.pose.onResults(r => {
-          S.iaOk = true; hud('ia', 'IA: pessoa ' + (r.poseLandmarks ? 'detectada' : 'não'), r.poseLandmarks ? 'on' : '');
-          if (!r.poseLandmarks) { S.pessoaBox = null; return; }
+          S.iaOk = true; if (!S.modelo) hud('ia', 'IA: pessoa ' + (r.poseLandmarks ? 'detectada' : 'não'), r.poseLandmarks ? 'on' : '');
+          if (!r.poseLandmarks) { S.pessoaBox = null; S.maos = []; return; }
+          // pulsos e pontas dos dedos (15, 16, 19, 20): é a mão que coloca/tira a peça
+          S.maos = [15, 16, 19, 20].map(i => r.poseLandmarks[i]).filter(l => l && (l.visibility || 0) > 0.4).map(l => ({ x: l.x, y: l.y }));
+          const agora = performance.now(), za = areaAtiva();
+          if (za && S.maos.some(m => m.x >= za.x - 0.04 && m.x <= za.x + za.w + 0.04 && m.y >= za.y - 0.04 && m.y <= za.y + za.h + 0.04)) S.ultimaMao = agora;
           const vis = r.poseLandmarks.filter(l => (l.visibility || 0) > 0.5);
           if (vis.length < 4) { S.pessoaBox = null; return; }
           const xs = vis.map(l => l.x), ys = vis.map(l => l.y);
           S.pessoaBox = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
         });
-        S.pose.initialize().then(() => { S.posePronto = true; S.iaOk = true; if (S.capacidades) S.capacidades.ia = true; S.capEnviadas = false; hud('ia', 'IA: pronta', ''); })
-          .catch(e => { console.warn('Pose', e); hud('ia', 'IA indisponível — usando só movimento', 'alerta'); S.pose = null; });
-      } catch (e) { hud('ia', 'IA indisponível — usando só movimento', 'alerta'); S.pose = null; }
+        S.pose.initialize().then(() => { S.posePronto = true; S.iaOk = true; if (S.capacidades) S.capacidades.ia = true; S.capEnviadas = false; if (!S.modelo) hud('ia', 'IA: pronta', ''); })
+          .catch(e => { console.warn('Pose', e); if (!S.modelo) hud('ia', 'IA de pessoas indisponível — usando só movimento', 'alerta'); S.pose = null; });
+      } catch (e) { if (!S.modelo) hud('ia', 'IA de pessoas indisponível — usando só movimento', 'alerta'); S.pose = null; }
     }
 
     /* ───────── servidor: config + comandos ───────── */
@@ -124,10 +128,22 @@ window.ContadorCam = (function () {
       else if (c.tipo === 'reiniciar_camera') abrirCamera().catch(e => avisoErro('Câmera: ' + e.message));
       else if (c.tipo === 'encerrar') { parar(); o.onEncerrar && o.onEncerrar(); }
     }
-    function recalibrar() { S.ref = null; S.refAnterior = null; S.fundo = null; S.estado = 'calibrando'; S.livreDesde = 0; S.contEstavel = null; S.histCont = []; }
+    function recalibrar() { S.ref = null; S.refAnterior = null; S.fundo = null; S.estado = 'calibrando'; S.livreDesde = 0; S.contEstavel = null; S.chaveEstavel = null; S.histCont = []; S.pallet = null; S.histPallet = []; S.areaAuto = null; }
 
     /* ───────── análise da área ───────── */
-    function zonaPx() { const z = S.zona; return { x: Math.round(z.x * PROC_W), y: Math.round(z.y * PROC_H), w: Math.max(8, Math.round(z.w * PROC_W)), h: Math.max(8, Math.round(z.h * PROC_H)) }; }
+    const COR_CLASSE = { caixa: '#F0B429', peca: '#56B6E0', pallet: '#A78BFA', objeto: '#35C95C' };
+    const ROTULO_CLASSE = { caixa: 'CAIXA', peca: 'PEÇA', pallet: 'PALLET', objeto: 'OBJETO' };
+    function resumoPallet() {
+      const c = S.contAtual || {}, partes = [];
+      if (c.caixa) partes.push(c.caixa + (c.caixa > 1 ? ' caixas' : ' caixa'));
+      if (c.peca) partes.push(c.peca + (c.peca > 1 ? ' peças' : ' peça'));
+      if (c.objeto) partes.push(c.objeto + ' objeto(s)');
+      if (S.temClassePallet && !S.palletOk) return 'sem pallet' + (partes.length ? ' · ' + partes.join(', ') : '');
+      return partes.length ? (S.temClassePallet ? 'pallet com ' : '') + partes.join(', ') : (S.temClassePallet ? 'PALLET VAZIO' : 'nada');
+    }
+    /* área onde as caixas/peças contam: a marcada à mão; sem ela, a "coluna" acima do pallet que a IA achou */
+    function areaAtiva() { return S.zona || S.areaAuto || null; }
+    function zonaPx() { const z = areaAtiva(); return { x: Math.round(z.x * PROC_W), y: Math.round(z.y * PROC_H), w: Math.max(8, Math.round(z.w * PROC_W)), h: Math.max(8, Math.round(z.h * PROC_H)) }; }
     const N = REF_W * REF_H;
     /* a área reduzida a REF_W×REF_H: cinza (g) para detectar mudança e cor média (rgb) para decidir colocada × retirada */
     function amostraZona() {
@@ -202,7 +218,7 @@ window.ContadorCam = (function () {
     }
     const mediana = a => { if (!a.length) return null; const s = a.slice().sort((x, y) => x - y); return s[(s.length / 2) | 0]; };
     function sobrepoe(bx) {
-      const z = S.zona; if (!bx || !z) return false;
+      const z = areaAtiva(); if (!bx || !z) return false;
       const ix = Math.max(0, Math.min(bx.x + bx.w, z.x + z.w) - Math.max(bx.x, z.x)), iy = Math.max(0, Math.min(bx.y + bx.h, z.y + z.h) - Math.max(bx.y, z.y));
       return ix * iy > 0.02 * z.w * z.h;
     }
@@ -285,16 +301,18 @@ window.ContadorCam = (function () {
         if (!r.ok) throw new Error('modelo não encontrado');
         const buf = await r.arrayBuffer();
         const sess = await ort.InferenceSession.create(buf, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
-        S.modelo = { id: info.id, imgsz: info.imgsz || 416, sess, entrada: sess.inputNames[0], saida: sess.outputNames[0], metricas: info.metricas };
+        S.modelo = { id: info.id, imgsz: info.imgsz || 416, tipo: info.tipo || 'det', classes: info.classes || ['com_pecas', 'vazio'], sess, entrada: sess.inputNames[0], saida: sess.outputNames[0], metricas: info.metricas };
+        S.pallet = null; S.histPallet = [];
         S.modeloId = info.id; S.contEstavel = null; S.histCont = []; S.detErro = null;
-        hud('ia', 'IA: modelo treinado carregado', 'on');
-        o.onModelo && o.onModelo(S.modelo);
+        hud('ia', S.modelo.tipo === 'cls' ? 'IA: pallet vazio × com peças' : 'IA: ' + (S.modelo.classes || ['objeto']).map(c => ROTULO_CLASSE[c] || c).join(' / '), 'on');
+        o.onModelo && o.onModelo(S.modelo); o.onConfig && o.onConfig(S.cfg, S.zona);
       } catch (e) { S.detErro = e.message; S.modelo = null; hud('ia', 'IA: falha ao carregar modelo (' + e.message + ')', 'erro'); }
       S.modeloCarregando = false;
     }
     const det = document.createElement('canvas'); const dctx = det.getContext('2d', { willReadFrequently: true });
     async function detectar(t) {
       const m = S.modelo; if (!m || !video.videoWidth) return;
+      if (m.tipo === 'cls') return classificar(t);
       S.detOcupado = true;
       try {
         const sz = m.imgsz, vw = video.videoWidth, vh = video.videoHeight, s = sz / Math.max(vw, vh);
@@ -304,49 +322,121 @@ window.ContadorCam = (function () {
         for (let i = 0; i < n; i++) { f[i] = px[i * 4] / 255; f[n + i] = px[i * 4 + 1] / 255; f[2 * n + i] = px[i * 4 + 2] / 255; }
         const out = await m.sess.run({ [m.entrada]: new ort.Tensor('float32', f, [1, 3, sz, sz]) });
         const o2 = out[m.saida], d = o2.data, A = o2.dims[2], C = o2.dims[1];   // [1, 4+nc, A]
+        const nomes = m.classes || ['objeto'];
         const cand = [];
         for (let a = 0; a < A; a++) {
-          let sc = 0; for (let c = 4; c < C; c++) sc = Math.max(sc, d[c * A + a]);
+          let sc = 0, ci = 0; for (let c = 4; c < C; c++) { const v = d[c * A + a]; if (v > sc) { sc = v; ci = c - 4; } }
           if (sc < 0.35) continue;
           const cx = d[a], cy = d[A + a], w = d[2 * A + a], h = d[3 * A + a];
-          cand.push({ x: (cx - w / 2 - ox) / s / vw, y: (cy - h / 2 - oy) / s / vh, w: w / s / vw, h: h / s / vh, sc });
+          cand.push({ x: (cx - w / 2 - ox) / s / vw, y: (cy - h / 2 - oy) / s / vh, w: w / s / vw, h: h / s / vh, sc, classe: nomes[ci] || 'objeto' });
         }
         cand.sort((p, q) => q.sc - p.sc);
         const fin = [];
-        for (const c of cand) { if (fin.every(k => iou(k, c) < 0.45)) fin.push(c); if (fin.length >= 60) break; }
+        for (const c of cand) { if (fin.every(k => k.classe !== c.classe || iou(k, c) < 0.45)) fin.push(c); if (fin.length >= 60) break; }
         S.dets = fin;
-        const z = S.zona;
-        const dentro = z ? fin.filter(b => { const cx = b.x + b.w / 2, cy = b.y + b.h / 2; return cx >= z.x && cx <= z.x + z.w && cy >= z.y && cy <= z.y + z.h; }) : fin;
-        avaliarContagem(dentro.length, t);
+        // pallet: o mais confiável; define a área automática (coluna acima dele) quando não há área marcada
+        const pallet = fin.filter(b => b.classe === 'pallet').sort((p, q) => q.sc - p.sc)[0] || null;
+        S.temClassePallet = nomes.includes('pallet');
+        S.palletBox = pallet;
+        if (pallet && !S.zona) {
+          // coluna acima do pallet até ~1,6× a largura dele (altura de pilha); de cima, cobre o próprio pallet
+          const alturaPilha = pallet.w * (vw / vh) * 1.6, topo = Math.max(0, pallet.y - alturaPilha);
+          const nova = { x: Math.max(0, pallet.x - pallet.w * 0.08), y: topo, w: Math.min(1, pallet.w * 1.16), h: Math.min(1, pallet.y + pallet.h) - topo };
+          const a0 = S.areaAuto, difere = (a, b) => Math.abs(a.x - b.x) > 0.03 || Math.abs(a.w - b.w) > 0.03 || Math.abs(a.y - b.y) > 0.03 || Math.abs(a.h - b.h) > 0.03;
+          if (!a0) { S.areaAuto = nova; S.ultimoQuadro = null; }
+          else if (difere(a0, nova)) {
+            // só move a área se o pallet aparecer no novo lugar em 4 leituras seguidas (pessoa tapando o pallet não mexe na área)
+            if (S.areaCand && !difere(S.areaCand, nova)) S.areaCandN++; else { S.areaCand = nova; S.areaCandN = 1; }
+            if (S.areaCandN >= 4) { S.areaAuto = nova; S.ultimoQuadro = null; S.areaCand = null; }
+          } else S.areaCand = null;
+        }
+        const z = areaAtiva();
+        const itens = fin.filter(b => b.classe !== 'pallet');
+        const dentro = z ? itens.filter(b => { const cx = b.x + b.w / 2, cy = b.y + b.h / 2; return cx >= z.x && cx <= z.x + z.w && cy >= z.y && cy <= z.y + z.h; }) : itens;
+        const cont = {}; for (const b of dentro) cont[b.classe] = (cont[b.classe] || 0) + 1;
+        avaliarContagem(cont, S.temClassePallet ? !!pallet : true, t);
       } catch (e) { S.detErro = e.message; }
       S.detOcupado = false;
+    }
+    /* modo pallet: recorta a área, classifica vazio × com peças; vazio→com peças = +1, com peças→vazio = pallet liberado */
+    async function classificar(t) {
+      const m = S.modelo, z = S.zona; if (!z) { S.estado = 'calibrando'; return; }
+      S.detOcupado = true;
+      try {
+        const sz = m.imgsz || 224, vw = video.videoWidth, vh = video.videoHeight;
+        det.width = sz; det.height = sz; dctx.drawImage(video, z.x * vw, z.y * vh, z.w * vw, z.h * vh, 0, 0, sz, sz);
+        const px = dctx.getImageData(0, 0, sz, sz).data, n = sz * sz, f = new Float32Array(3 * n);
+        for (let i = 0; i < n; i++) { f[i] = px[i * 4] / 255; f[n + i] = px[i * 4 + 1] / 255; f[2 * n + i] = px[i * 4 + 2] / 255; }
+        const out = await m.sess.run({ [m.entrada]: new ort.Tensor('float32', f, [1, 3, sz, sz]) });
+        let d = Array.from(out[m.saida].data);
+        if (d.some(v => v < 0 || v > 1)) { const mx = Math.max(...d); const e = d.map(v => Math.exp(v - mx)); const s = e.reduce((a, b) => a + b, 0); d = e.map(v => v / s); }
+        const iCom = Math.max(0, m.classes.indexOf('com_pecas'));
+        S.probCom = d[iCom];
+        avaliarPallet(S.probCom, t);
+      } catch (e) { S.detErro = e.message; }
+      S.detOcupado = false;
+    }
+    function avaliarPallet(p, t) {
+      const presenca = sobrepoe(S.pessoaBox) || movimentoRecente(t);
+      if (presenca) { S.estado = 'ocupado'; S.histPallet = []; return; }
+      const leitura = p > 0.6 ? 'com' : p < 0.4 ? 'vazio' : null;   // zona morta no meio: não decide
+      if (!leitura) { S.estado = 'confirmando'; return; }
+      S.histPallet.push({ v: leitura, t }); S.histPallet = S.histPallet.filter(h => t - h.t <= 2500);
+      const estavel = S.histPallet.length >= 3 && S.histPallet.every(h => h.v === leitura) && t - S.histPallet[0].t >= 2200;
+      if (S.pallet === null) { S.estado = 'calibrando'; if (estavel) { S.pallet = leitura; S.estado = 'livre'; } return; }
+      if (leitura === S.pallet) { S.estado = 'livre'; return; }
+      if (!estavel) { S.estado = 'confirmando'; return; }
+      if (leitura === 'com') registrar('ia', 1, Math.round(p * 100));       // pallet recebeu peça(s)
+      else registrar('troca_pallet', 0, Math.round((1 - p) * 100));         // pallet esvaziou / foi trocado
+      S.pallet = leitura; S.estado = 'livre';
     }
     function iou(a, b) {
       const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)), iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
       const i = ix * iy; return i / (a.w * a.h + b.w * b.h - i + 1e-9);
     }
     /* presença (pessoa/movimento) segura a avaliação; contagem estável por 2,5 s muda o total */
-    function avaliarContagem(n, t) {
-      if (!S.zona) { S.estado = 'livre'; return; }
-      const presenca = sobrepoe(S.pessoaBox) || movimentoRecente(t);
-      if (presenca) { S.estado = 'ocupado'; S.histCont = []; return; }
-      S.histCont.push({ n, t }); S.histCont = S.histCont.filter(h => t - h.t <= 2500);
-      const estavel = S.histCont.length >= 3 && S.histCont.every(h => h.n === n) && t - S.histCont[0].t >= 2200;
-      if (S.contEstavel === null) { S.estado = 'calibrando'; if (estavel) { S.contEstavel = n; S.estado = 'livre'; } return; }
-      if (n === S.contEstavel) { S.estado = 'livre'; return; }
-      if (!estavel) { S.estado = 'confirmando'; return; }
-      const delta = n - S.contEstavel;
-      if (delta <= -5 && n <= 1) { registrar('troca_pallet', 0, null); }           // pallet cheio saiu
-      else if (delta >= 5 && S.contEstavel <= 1) { registrar('troca_pallet', 0, null); }   // chegou um pallet já com caixas
-      else if (delta > 0) registrar('ia', Math.min(4, delta), null);
-      else registrar('ia_retirada', Math.min(4, -delta), null);
-      S.contEstavel = n; S.estado = 'livre';
+    /* cont = { caixa: 3, peca: 1 } dentro da área; palletOk = a IA está vendo o pallet.
+       Só decide com a cena parada e ninguém na frente por ~2,5 s. Cada classe é comparada com a última
+       contagem estável: +n colocadas, −n retiradas. Pallet sumiu = pallet trocado (não são retiradas). */
+    const chave = c => Object.keys(c).filter(k => c[k]).sort().map(k => k + ':' + c[k]).join(',') || 'vazio';
+    function avaliarContagem(cont, palletOk, t) {
+      S.contAtual = cont; S.palletOk = palletOk;
+      if (!areaAtiva()) { S.estado = S.temClassePallet ? 'sem_pallet' : 'livre'; return; }
+      const pessoa = sobrepoe(S.pessoaBox), mov = movimentoRecente(t);
+      S.movSeq = mov ? (S.movSeq || 0) + 1 : 0;
+      // "alguém mexeu": pessoa vista pela IA, movimento grande (corpo/braço cobrindo ≥ 12 % da área) ou movimento
+      // contínuo (≥ 2 leituras seguidas). Uma caixa que "aparece" sozinha ou um piscar de luz pequeno não valem.
+      if (pessoa || S.movFrac >= 0.12 || S.movSeq >= 2) S.ultimaPresenca = t;
+      if (pessoa || mov) { S.estado = 'ocupado'; S.histCont = []; return; }
+      const k = (palletOk ? 'P|' : 'X|') + chave(cont);
+      S.histCont.push({ k, t }); S.histCont = S.histCont.filter(h => t - h.t <= 2500);
+      const estavel = S.histCont.length >= 3 && S.histCont.every(h => h.k === k) && t - S.histCont[0].t >= 2200;
+      if (!estavel) { if (S.contEstavel !== null && k !== S.chaveEstavel) S.estado = 'confirmando'; else if (S.contEstavel === null) S.estado = 'calibrando'; return; }
+      if (S.contEstavel === null) { S.contEstavel = { ...cont }; S.palletEstavel = palletOk; S.chaveEstavel = k; S.estado = palletOk ? 'livre' : 'sem_pallet'; return; }
+      if (k === S.chaveEstavel) { S.estado = palletOk ? 'livre' : 'sem_pallet'; return; }
+      // pallet saiu (com ou sem carga) ou chegou um pallet novo: não é colocar/retirar peça
+      if (S.temClassePallet && palletOk !== S.palletEstavel) {
+        if (!palletOk) registrar('troca_pallet', 0, null, 'pallet saiu');
+        else registrar('troca_pallet', 0, null, 'pallet novo' + (Object.keys(cont).length ? ' (' + chave(cont) + ')' : ' vazio'));
+      } else if (t - Math.max(S.ultimaMao || -1e9, S.ultimaPresenca || -1e9) > 25000) {
+        // mudou sem ninguém ter mexido no pallet (sombra, reflexo, a IA oscilou): só ajusta a referência, não conta
+        S.ajustes = (S.ajustes || 0) + 1; console.info('Contador: mudança sem pessoa/mão no pallet ignorada', chave(S.contEstavel), '→', chave(cont));
+      } else {
+        const tipos = new Set([...Object.keys(cont), ...Object.keys(S.contEstavel)]);
+        for (const tipo of tipos) {
+          const delta = (cont[tipo] || 0) - (S.contEstavel[tipo] || 0);
+          if (delta > 0) registrar('ia', Math.min(4, delta), null, tipo);
+          else if (delta < 0) registrar('ia_retirada', Math.min(4, -delta), null, tipo);
+        }
+      }
+      S.contEstavel = { ...cont }; S.palletEstavel = palletOk; S.chaveEstavel = k; S.estado = palletOk ? 'livre' : 'sem_pallet';
     }
     function movimentoRecente(t) {
-      if (!S.zona) return false;
+      if (!areaAtiva()) return false;
       const atual = amostraZona();
       const mov = S.ultimoQuadro ? comparar(atual.g, S.ultimoQuadro.g, 16).frac : 0;
       S.ultimoQuadro = atual;
+      S.movFrac = mov;
       return mov > 0.015;
     }
 
@@ -356,11 +446,11 @@ window.ContadorCam = (function () {
       if (S.zona) { cx.strokeStyle = '#35C95C'; cx.lineWidth = 2; cx.strokeRect(S.zona.x * 320, S.zona.y * 240, S.zona.w * 320, S.zona.h * 240); }
       return c.toDataURL('image/jpeg', 0.6);
     }
-    function registrar(origem, valor, frac) {
+    function registrar(origem, valor, frac, detalhe) {
       if (origem === 'manual_mais') valor = 1; else if (origem === 'manual_menos') valor = -1; else if (origem === 'troca_pallet') valor = 0; else if (origem === 'ia_retirada') valor = -Math.abs(valor || 1);
-      const ev = { linha_id: S.linhaId, sessao_id: S.sessaoId || (S.sessao ? S.sessao.id : null), origem, valor: Math.abs(valor) || undefined, ts: new Date().toISOString(), mudanca_pct: frac != null ? Math.round(frac * 1000) / 10 : null, foto: miniatura(), dispositivo: disp };
+      const ev = { linha_id: S.linhaId, sessao_id: S.sessaoId || (S.sessao ? S.sessao.id : null), origem, valor: Math.abs(valor) || undefined, ts: new Date().toISOString(), mudanca_pct: frac != null ? Math.round(frac * 1000) / 10 : null, foto: miniatura(), dispositivo: disp, detalhe: detalhe || null };
       if (valor) { S.contagem += valor; o.onContagem && o.onContagem(S.contagem); if (o.flash) { o.flash.classList.add('on'); setTimeout(() => o.flash.classList.remove('on'), 250); } if (navigator.vibrate) navigator.vibrate(60); }
-      S.eventos.push({ ts: ev.ts, valor, origem });
+      S.eventos.push({ ts: ev.ts, valor, origem, detalhe: ev.detalhe });
       o.onEvento && o.onEvento({ ...ev, valor });
       S.fila.push(ev); salvarFila(); enviarFila();
     }
@@ -399,12 +489,26 @@ window.ContadorCam = (function () {
         sctx.fillStyle = 'rgba(53,201,92,.08)'; sctx.fillRect(mapX(z.x), mapY(z.y), z.w / sw * W, z.h / sh * H);
         if (S.cfg.caixa && S.cfg.caixa_pos) { sctx.strokeStyle = 'rgba(240,180,41,.8)'; sctx.lineWidth = 1.5; sctx.setLineDash([4, 3]); sctx.strokeRect(mapX(S.cfg.caixa_pos.x), mapY(S.cfg.caixa_pos.y), S.cfg.caixa.w / sw * W, S.cfg.caixa.h / sh * H); sctx.setLineDash([]); }
       }
-      if (S.modelo) { sctx.lineWidth = 2; for (const b of S.dets) { const cx = b.x + b.w / 2, cy = b.y + b.h / 2, z = S.zona, dentro = !z || (cx >= z.x && cx <= z.x + z.w && cy >= z.y && cy <= z.y + z.h); sctx.strokeStyle = dentro ? 'rgba(53,201,92,.95)' : 'rgba(255,255,255,.35)'; sctx.strokeRect(mapX(b.x), mapY(b.y), b.w / sw * W, b.h / sh * H); } }
+      if (S.modelo && S.modelo.tipo !== 'cls') {
+        const za = areaAtiva();
+        if (za && !S.zona) { sctx.strokeStyle = 'rgba(167,139,250,.6)'; sctx.lineWidth = 1.5; sctx.setLineDash([6, 4]); sctx.strokeRect(mapX(za.x), mapY(za.y), za.w / sw * W, za.h / sh * H); sctx.setLineDash([]); }
+        sctx.lineWidth = 2; sctx.font = 'bold 11px sans-serif';
+        for (const b of S.dets) {
+          const cx = b.x + b.w / 2, cy = b.y + b.h / 2, dentro = b.classe === 'pallet' || !za || (cx >= za.x && cx <= za.x + za.w && cy >= za.y && cy <= za.y + za.h);
+          const cor = COR_CLASSE[b.classe] || COR_CLASSE.objeto;
+          sctx.strokeStyle = dentro ? cor : 'rgba(255,255,255,.3)'; sctx.strokeRect(mapX(b.x), mapY(b.y), b.w / sw * W, b.h / sh * H);
+          if (dentro) { sctx.fillStyle = cor; sctx.fillText(ROTULO_CLASSE[b.classe] || b.classe, mapX(b.x) + 3, mapY(b.y) + 12); }
+        }
+      }
+      if (S.maos && S.maos.length) { const za = areaAtiva(); for (const m of S.maos) { const dentro = za && m.x >= za.x && m.x <= za.x + za.w && m.y >= za.y && m.y <= za.y + za.h; sctx.fillStyle = dentro ? '#35C95C' : 'rgba(255,255,255,.6)'; sctx.beginPath(); sctx.arc(mapX(m.x), mapY(m.y), dentro ? 7 : 4, 0, Math.PI * 2); sctx.fill(); } }
       if (S.pessoaBox) { sctx.strokeStyle = 'rgba(86,182,224,.9)'; sctx.lineWidth = 2; sctx.strokeRect(mapX(S.pessoaBox.x), mapY(S.pessoaBox.y), S.pessoaBox.w / sw * W, S.pessoaBox.h / sh * H); }
       const nomes = { calibrando: 'Calibrando — saia da frente do pallet', livre: 'Livre', ocupado: 'Pessoa no pallet', assentando: 'Conferindo…', confirmando: 'Confirmando…' };
-      const txt = (S.pausado ? 'PAUSADO · ' : '') + (S.zona ? nomes[S.estado] : 'Sem área marcada') + (S.modelo ? ' · IA vê ' + S.dets.length + (S.contEstavel != null ? ' (estável ' + S.contEstavel + ')' : '') : '') + ' · ' + S.fps + ' fps';
+      const ia = !S.modelo ? '' : S.modelo.tipo === 'cls' ? ' · pallet ' + (S.probCom == null ? '?' : S.probCom > 0.5 ? 'COM PEÇAS' : 'VAZIO') + ' (' + Math.round((S.probCom || 0) * 100) + '%)' : ' · ' + resumoPallet();
+      const temArea = !!areaAtiva();
+      const maoAgora = S.ultimaMao && performance.now() - S.ultimaMao < 1500;
+      const txt = (S.pausado ? 'PAUSADO · ' : '') + (maoAgora ? '✋ mão no pallet · ' : '') + (S.estado === 'sem_pallet' ? 'Sem pallet' : temArea ? nomes[S.estado] : (S.modelo && S.modelo.tipo !== 'cls' ? 'Procurando o pallet…' : 'Sem área marcada')) + ia + ' · ' + S.fps + ' fps';
       hud('estado', txt, S.estado === 'ocupado' ? 'alerta' : S.estado === 'livre' ? 'on' : '');
-      o.onEstado && o.onEstado(S.zona ? S.estado : 'sem_area', txt);
+      o.onEstado && o.onEstado(areaAtiva() ? S.estado : 'sem_area', txt);
       desenhar.map = { sx, sy, sw, sh };
     }
     /* marcar área/caixa arrastando no próprio aparelho (também salva no servidor) */
@@ -437,11 +541,11 @@ window.ContadorCam = (function () {
         ectx.drawImage(video, 0, 0, 640, 480);
         const quadroLimpo = envio.toDataURL('image/jpeg', 0.6);   // sem desenhos: é o que vira amostra de treino
         if (S.zona) { ectx.strokeStyle = S.estado === 'ocupado' ? 'rgba(240,180,41,.9)' : 'rgba(53,201,92,.9)'; ectx.lineWidth = 2; ectx.strokeRect(S.zona.x * 640, S.zona.y * 480, S.zona.w * 640, S.zona.h * 480); }
-        if (S.modelo) { ectx.lineWidth = 1.5; ectx.strokeStyle = 'rgba(53,201,92,.9)'; for (const b of S.dets) ectx.strokeRect(b.x * 640, b.y * 480, b.w * 640, b.h * 480); }
+        if (S.modelo && S.modelo.tipo !== 'cls') { ectx.lineWidth = 2; ectx.font = 'bold 13px sans-serif'; for (const b of S.dets) { const cor = COR_CLASSE[b.classe] || COR_CLASSE.objeto; ectx.strokeStyle = cor; ectx.strokeRect(b.x * 640, b.y * 480, b.w * 640, b.h * 480); ectx.fillStyle = cor; ectx.fillText(ROTULO_CLASSE[b.classe] || b.classe, b.x * 640 + 3, b.y * 480 + 14); } }
         ectx.fillStyle = 'rgba(10,22,32,.7)'; ectx.fillRect(0, 0, 640, 26);
         ectx.fillStyle = '#fff'; ectx.font = 'bold 14px sans-serif';
         ectx.fillText(`${(S.linha && (S.linha.nome || S.linha.celula)) || ''}  ·  ${S.contagem} un  ·  ${new Date().toLocaleTimeString('pt-BR')}`, 10, 18);
-        const body = { linha_id: S.linhaId, produto_id: S.produtoId, sessao_id: S.sessaoId || (S.sessao ? S.sessao.id : null), contagem: S.contagem, estado: S.zona ? S.estado : 'sem_area', dispositivo: disp, jpeg: envio.toDataURL('image/jpeg', 0.55), jpeg_limpo: quadroLimpo };
+        const body = { linha_id: S.linhaId, produto_id: S.produtoId, sessao_id: S.sessaoId || (S.sessao ? S.sessao.id : null), contagem: S.contagem, estado: areaAtiva() ? S.estado : 'sem_area', resumo: S.modelo && S.modelo.tipo !== 'cls' ? resumoPallet() : null, dispositivo: disp, jpeg: envio.toDataURL('image/jpeg', 0.55), jpeg_limpo: quadroLimpo };
         if (S.capacidades && !S.capEnviadas) body.capacidades = S.capacidades;
         const r = await fetch('/api/contador/frame', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         if (r.status === 401) location.href = '/login';
@@ -479,7 +583,7 @@ window.ContadorCam = (function () {
       conectar, parar, trocarSessao, registrar: (origem) => registrar(origem, 0, null), recalibrar: () => { recalibrar(); },
       trocaPallet: () => { recalibrar(); registrar('troca_pallet', 0, null); },
       modoDesenho: m => { modoDesenho = m; }, salvarConfig, estado: S,
-      get modelo() { return S.modelo; }, get dets() { return S.dets; }, get contagem() { return S.contagem; }, get sessao() { return S.sessao; }, get eventos() { return S.eventos; }, get cfg() { return S.cfg; }, get zona() { return S.zona; }, get ativo() { return S.ativo; }
+      get modelo() { return S.modelo; }, get resumo() { return resumoPallet(); }, get contAtual() { return S.contAtual; }, get palletOk() { return S.palletOk; }, get dets() { return S.dets; }, get contagem() { return S.contagem; }, get sessao() { return S.sessao; }, get eventos() { return S.eventos; }, get cfg() { return S.cfg; }, get zona() { return S.zona; }, get ativo() { return S.ativo; }
     };
   }
   return { criar, CFG_PADRAO };

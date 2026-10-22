@@ -629,7 +629,7 @@ async function conectarCamAqui() {
     hud: { ia: $c('camHudIa'), estado: $c('camHudEstado'), live: $c('camHudLive') },
     onContagem: () => atualizarPlacarCam(),
     onSessao: () => atualizarPlacarCam(),
-    onConfig: (cfg, zona) => { $c('camDica').style.display = zona ? 'none' : ''; $c('camMult').checked = !!cfg.multiplas; $c('camInfo').innerHTML = (CAM && CAM.modelo ? '<b>IA treinada</b>: reconhece as caixas/peças e conta colocada (+1) e retirada (−1)' : `Sem IA treinada ainda — contando por diferença de imagem (sensibilidade ${cfg.sens}/10). Ensine a IA no painel das câmeras › Configurar › Ensinar a IA`) + ' · zoom e câmera ajustam-se pelo painel no PC'; },
+    onConfig: (cfg, zona) => { $c('camDica').style.display = (zona || (CAM && CAM.modelo && CAM.modelo.tipo !== 'cls')) ? 'none' : ''; $c('camMult').checked = !!cfg.multiplas; $c('camInfo').innerHTML = (CAM && CAM.modelo ? (CAM.modelo.tipo === 'cls' ? '<b>IA treinada</b>: pallet vazio × com peças' : '<b>IA treinada</b>: reconhece pallet, caixas e peças; conta cada uma colocada (+1) e retirada (−1)') : `Sem IA treinada ainda — contando por diferença de imagem (sensibilidade ${cfg.sens}/10). Ensine a IA no painel das câmeras › Configurar › Ensinar a IA`) + ' · zoom e câmera ajustam-se pelo painel no PC'; },
     onEncerrar: () => { CAM = null; mostrarPassoCam('conectar'); },
     onModelo: m => { $c('camSelo').textContent = m ? 'IA treinada ativa' : 'câmera deste aparelho'; if (m) avisoOk('IA treinada carregada: a contagem passa a ser por reconhecimento das caixas.'); }
   });

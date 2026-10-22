@@ -138,7 +138,7 @@ async function iniciar() {
     onContagem: n => { $('contagem').textContent = n; atualizarPlacar(); },
     onEvento: ev => { thumbs.unshift(ev); thumbs = thumbs.slice(0, 6); renderUltimos(); },
     onSessao: () => atualizarPlacar(),
-    onConfig: (cfg, zona) => { $('dica').style.display = zona ? 'none' : ''; $('info').innerHTML = `Sensibilidade ${cfg.sens}/10 · conta caixa colocada (+1) e retirada (−1)${cfg.caixa ? ' · tamanho da caixa marcado' : ' · aprende o tamanho da caixa sozinha'}`; },
+    onConfig: (cfg, zona) => { $('dica').style.display = (zona || (cam && cam.modelo && cam.modelo.tipo !== 'cls')) ? 'none' : ''; $('info').innerHTML = `Sensibilidade ${cfg.sens}/10 · conta caixa colocada (+1) e retirada (−1)${cfg.caixa ? ' · tamanho da caixa marcado' : ' · aprende o tamanho da caixa sozinha'}`; },
     onOffline: off => $('offline').classList.toggle('on', off),
     onEncerrar: () => location.href = '/cadenciador/camera',
     onModelo: m => { if (m) avisoOk('IA treinada carregada: contagem por reconhecimento das caixas.'); }
