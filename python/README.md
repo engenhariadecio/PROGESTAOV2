@@ -7,7 +7,7 @@ O servidor chama este script sozinho (botão **Treinar IA** no painel das câmer
 Para isso o servidor precisa de Python 3 com os pacotes de `requirements.txt`:
 
 ```bash
-pip3 install -r python/requirements.txt
+pip3 install -r python/requirements-local.txt
 ```
 
 No Railway o `Dockerfile` da raiz já instala tudo. Se preferir sem Docker, remova o

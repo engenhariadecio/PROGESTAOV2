@@ -124,7 +124,7 @@ router.get('/linhas', requireAuth, async (req, res) => {
       let c = {};
       l.online = !!q && agora - q.ts < VIVO_MS;
       l.frame_ts = q ? q.ts : null;
-      l.estado = q ? q.estado : '';
+      l.estado = q ? q.estado : ''; l.resumo = q ? q.resumo : null;
       l.dispositivo = q ? q.dispositivo : null;
       l.usuario = q ? q.usuario : null;
       l.capacidades = q ? q.capacidades : null;
@@ -239,7 +239,7 @@ router.get('/linhas/:id/estado', requireAuth, async (req, res) => {
     const modelo = await modeloAtual(l.id, l.config_produto_id);
     res.json({ linha: { id: l.id, celula: l.celula, nome: l.nome, produto_id: l.config_produto_id, produto_nome: l.produto_nome, takt_padrao: l.takt_padrao },
       config: l.config, config_ts: l.updated_at, sessao, contagem: cont, comandos, agora: Date.now(),
-      modelo: modelo ? { id: modelo.id, imgsz: modelo.imgsz, created_at: modelo.created_at, metricas: modelo.metricas } : null });
+      modelo: modelo ? { id: modelo.id, imgsz: modelo.imgsz, tipo: modelo.tipo || 'det', classes: modelo.classes, created_at: modelo.created_at, metricas: modelo.metricas } : null });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -254,7 +254,7 @@ router.get('/linhas/:id/qr.svg', requireAuth, async (req, res) => {
 /* ───────── Ao vivo ───────── */
 
 router.post('/frame', requireAuth, (req, res) => {
-  const { linha_id, contagem, estado, dispositivo, jpeg, jpeg_limpo, capacidades, produto_id, sessao_id } = req.body || {};
+  const { linha_id, contagem, estado, resumo, dispositivo, jpeg, jpeg_limpo, capacidades, produto_id, sessao_id } = req.body || {};
   if (!idOk(linha_id)) return res.status(400).json({ error: 'Linha obrigatória' });
   const buf = b64jpeg(jpeg);
   if (!buf) return res.status(400).json({ error: 'Quadro inválido' });
@@ -263,7 +263,7 @@ router.post('/frame', requireAuth, (req, res) => {
   const ant = QUADROS.get(id) || {};
   QUADROS.set(id, {
     buf, limpo: b64jpeg(jpeg_limpo) || buf, ts: Date.now(), contagem: Number(contagem) || 0,
-    estado: String(estado || '').slice(0, 40), dispositivo: String(dispositivo || '').slice(0, 120),
+    estado: String(estado || '').slice(0, 40), resumo: resumo ? String(resumo).slice(0, 80) : null, dispositivo: String(dispositivo || '').slice(0, 120),
     usuario: req.session.nome || req.session.username,
     produto_id: idOk(produto_id) ? Number(produto_id) : null, sessao_id: idOk(sessao_id) ? Number(sessao_id) : null,
     capacidades: capacidades && typeof capacidades === 'object' ? capacidades : (ant.capacidades || null)
@@ -280,11 +280,14 @@ router.get('/frame/:linha', requireAuth, (req, res) => {
 
 /* ───────── Eventos ───────── */
 
+const CLASSES_DET = ['caixa', 'peca', 'pallet'];   // ordem = índice de classe no modelo
+const limparMarc = arr => (Array.isArray(arr) ? arr : []).filter(c => c && isFinite(c.x) && isFinite(c.y) && isFinite(c.w) && isFinite(c.h) && c.w > 0.005 && c.h > 0.005)
+  .map(c => ({ x: +c.x, y: +c.y, w: +c.w, h: +c.h, c: CLASSES_DET.includes(c.c) ? c.c : 'caixa' }));
 const ORIG = { ia: 1, ia_retirada: -1, manual_mais: 1, manual_menos: -1, troca_pallet: 0, estorno: -1 };   // ia_retirada: caixa tirada do pallet; estorno: a câmera desfez uma contagem
 
 router.post('/eventos', requireAuth, naoPcp, async (req, res) => {
   try {
-    const { linha_id, celula, sessao_id, origem, valor, ts, foto, mudanca_pct, dispositivo } = req.body || {};
+    const { linha_id, celula, sessao_id, origem, valor, ts, foto, mudanca_pct, dispositivo, detalhe } = req.body || {};
     if (!(origem in ORIG)) return res.status(400).json({ error: 'Origem inválida' });
     let linha = null;
     if (idOk(linha_id)) linha = await carregarLinha(linha_id);
@@ -298,11 +301,11 @@ router.post('/eventos', requireAuth, naoPcp, async (req, res) => {
     if (fotoBuf && fotoBuf.length > FOTO_MAX) fotoBuf = null;
     const quando = ts && !isNaN(Date.parse(ts)) ? new Date(ts) : new Date();
     const r = await pool.query(
-      `INSERT INTO cont_eventos (linha_id, celula, sessao_id, ts, origem, valor, mudanca_pct, foto, dispositivo, usuario_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id, ts, valor`,
+      `INSERT INTO cont_eventos (linha_id, celula, sessao_id, ts, origem, valor, mudanca_pct, foto, dispositivo, usuario_id, detalhe)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id, ts, valor`,
       [linha ? linha.id : null, cel.slice(0, 80), sid, quando, origem, v,
        mudanca_pct != null && isFinite(Number(mudanca_pct)) ? Number(mudanca_pct) : null, fotoBuf,
-       String(dispositivo || '').slice(0, 120), req.session.userId || null]);
+       String(dispositivo || '').slice(0, 120), req.session.userId || null, detalhe ? String(detalhe).slice(0, 60) : null]);
     res.json(r.rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -319,7 +322,7 @@ router.get('/eventos', requireAuth, async (req, res) => {
     const where = [], params = [];
     filtroEventos(req.query, params, where);
     const r = await pool.query(
-      `SELECT e.id, e.linha_id, e.celula, e.sessao_id, e.ts, e.origem, e.valor, e.mudanca_pct, (e.foto IS NOT NULL) AS tem_foto, e.dispositivo, u.nome AS usuario_nome
+      `SELECT e.id, e.linha_id, e.celula, e.sessao_id, e.ts, e.origem, e.valor, e.mudanca_pct, e.detalhe, (e.foto IS NOT NULL) AS tem_foto, e.dispositivo, u.nome AS usuario_nome
          FROM cont_eventos e LEFT JOIN users u ON u.id = e.usuario_id
         ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY e.ts, e.id`, params);
     res.json(r.rows);
@@ -352,7 +355,7 @@ router.get('/analise', requireAuth, async (req, res) => {
     const where = [], params = [];
     filtroEventos({ ...req.query, data }, params, where);
     const eventos = (await pool.query(
-      `SELECT e.id, e.linha_id, e.celula, e.sessao_id, e.ts, e.origem, e.valor, e.mudanca_pct, (e.foto IS NOT NULL) AS tem_foto
+      `SELECT e.id, e.linha_id, e.celula, e.sessao_id, e.ts, e.origem, e.valor, e.mudanca_pct, e.detalhe, (e.foto IS NOT NULL) AS tem_foto
          FROM cont_eventos e WHERE ${where.join(' AND ')} ORDER BY e.ts, e.id`, params)).rows;
     let sessao = null, ciclos = [], paradas = [];
     let sid = idOk(req.query.sessao_id) ? Number(req.query.sessao_id) : (eventos.find(e => e.sessao_id) || {}).sessao_id;
@@ -410,7 +413,7 @@ router.get('/linhas/:id/amostras', requireAuth, async (req, res) => {
   try {
     const params = [req.params.id]; let where = 'linha_id = $1';
     if (idOk(req.query.produto_id)) { params.push(Number(req.query.produto_id)); where += ' AND produto_id = $2'; }
-    const r = await pool.query(`SELECT id, produto_id, largura, altura, caixas, created_at, jsonb_array_length(caixas) AS n FROM cont_amostras WHERE ${where} ORDER BY created_at DESC`, params);
+    const r = await pool.query(`SELECT id, produto_id, largura, altura, caixas, rotulo, created_at, jsonb_array_length(caixas) AS n FROM cont_amostras WHERE ${where} ORDER BY created_at DESC`, params);
     res.json(r.rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -423,21 +426,22 @@ router.get('/amostras/:id/jpeg', requireAuth, async (req, res) => {
 });
 router.post('/linhas/:id/amostras', requireAuth, naoPcp, async (req, res) => {
   try {
-    const { produto_id, jpeg, caixas, largura, altura, da_camera } = req.body || {};
+    const { produto_id, jpeg, caixas, largura, altura, da_camera, rotulo } = req.body || {};
     let buf = b64jpeg(jpeg);
     if (!buf && da_camera) { const q = QUADROS.get(Number(req.params.id)); buf = q && (q.limpo || q.buf); }   // usa o último quadro ao vivo, sem os desenhos
     if (!buf) return res.status(400).json({ error: 'Sem imagem (a câmera está transmitindo?)' });
-    const cx = Array.isArray(caixas) ? caixas.filter(c => c && isFinite(c.x) && isFinite(c.y) && isFinite(c.w) && isFinite(c.h) && c.w > 0.005 && c.h > 0.005).map(c => ({ x: +c.x, y: +c.y, w: +c.w, h: +c.h })) : [];
+    const cx = limparMarc(caixas);
     const r = await pool.query(
-      `INSERT INTO cont_amostras (linha_id, produto_id, jpeg, largura, altura, caixas, usuario_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, created_at`,
-      [req.params.id, idOk(produto_id) ? Number(produto_id) : null, buf, Number(largura) || 640, Number(altura) || 480, JSON.stringify(cx), req.session.userId || null]);
-    res.json({ ...r.rows[0], n: cx.length });
+      `INSERT INTO cont_amostras (linha_id, produto_id, jpeg, largura, altura, caixas, rotulo, usuario_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, created_at`,
+      [req.params.id, idOk(produto_id) ? Number(produto_id) : null, buf, Number(largura) || 640, Number(altura) || 480, JSON.stringify(cx), ['vazio', 'com_pecas'].includes(rotulo) ? rotulo : null, req.session.userId || null]);
+    res.json({ ...r.rows[0], n: cx.length, rotulo: ['vazio', 'com_pecas'].includes(rotulo) ? rotulo : null });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.put('/amostras/:id', requireAuth, naoPcp, async (req, res) => {
   try {
-    const cx = (Array.isArray(req.body.caixas) ? req.body.caixas : []).filter(c => c && isFinite(c.x) && c.w > 0.005 && c.h > 0.005).map(c => ({ x: +c.x, y: +c.y, w: +c.w, h: +c.h }));
-    await pool.query('UPDATE cont_amostras SET caixas = $2 WHERE id = $1', [req.params.id, JSON.stringify(cx)]);
+    const cx = limparMarc(req.body.caixas);
+    if ('rotulo' in req.body) await pool.query('UPDATE cont_amostras SET rotulo = $2 WHERE id = $1', [req.params.id, ['vazio', 'com_pecas'].includes(req.body.rotulo) ? req.body.rotulo : null]);
+    if (Array.isArray(req.body.caixas)) await pool.query('UPDATE cont_amostras SET caixas = $2 WHERE id = $1', [req.params.id, JSON.stringify(cx)]);
     res.json({ ok: true, n: cx.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -449,7 +453,7 @@ router.delete('/amostras/:id', requireAuth, naoPcp, async (req, res) => {
 /* modelo treinado (o aparelho baixa) */
 async function modeloAtual(linhaId, produtoId) {
   const r = await pool.query(
-    `SELECT id, produto_id, imgsz, metricas, amostras, created_at FROM cont_modelos WHERE linha_id = $1 AND (produto_id = $2 OR produto_id IS NULL)
+    `SELECT id, produto_id, imgsz, tipo, classes, metricas, amostras, created_at FROM cont_modelos WHERE linha_id = $1 AND (produto_id = $2 OR produto_id IS NULL)
       ORDER BY (produto_id IS NOT NULL) DESC, created_at DESC LIMIT 1`, [linhaId, idOk(produtoId) ? Number(produtoId) : null]);
   return r.rows[0] || null;
 }
@@ -479,22 +483,38 @@ router.post('/linhas/:id/treinar', requireAuth, naoPcp, async (req, res) => {
   verificarPython(async d => {
     if (!d.ok) return res.status(503).json({ error: 'Treino indisponível neste servidor: ' + d.motivo + '. Veja python/README no projeto.' });
     try {
-      const params = [linhaId]; let where = 'linha_id = $1';
-      if (produtoId) { params.push(produtoId); where += ' AND produto_id = $2'; }
-      const am = (await pool.query(`SELECT id, jpeg, largura, altura, caixas FROM cont_amostras WHERE ${where}`, params)).rows;
-      const marcadas = am.filter(a => (a.caixas || []).length);
-      if (marcadas.length < 3) return res.status(400).json({ error: `Marque caixas em pelo menos 3 quadros (há ${marcadas.length}). O ideal são 15 ou mais, com a pilha em alturas diferentes.` });
+      // todas_cameras: junta os quadros marcados de todas as câmeras (vários ângulos) num modelo só
+      const params = [], conds = [];
+      if (!req.body.todas_cameras) { params.push(linhaId); conds.push(`linha_id = $${params.length}`); }
+      if (produtoId) { params.push(produtoId); conds.push(`produto_id = $${params.length}`); }
+      const where = conds.length ? conds.join(' AND ') : 'TRUE';
+      const modo = req.body.modo === 'cls' ? 'cls' : 'det';
+      const am = (await pool.query(`SELECT id, jpeg, largura, altura, caixas, rotulo FROM cont_amostras WHERE ${where}`, params)).rows;
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'treino-'));
-      fs.mkdirSync(path.join(dir, 'images')); fs.mkdirSync(path.join(dir, 'labels'));
-      for (const a of am) {
-        fs.writeFileSync(path.join(dir, 'images', `a${a.id}.jpg`), a.jpeg);
-        fs.writeFileSync(path.join(dir, 'labels', `a${a.id}.txt`), (a.caixas || []).map(c => `0 ${(c.x + c.w / 2).toFixed(5)} ${(c.y + c.h / 2).toFixed(5)} ${c.w.toFixed(5)} ${c.h.toFixed(5)}`).join('\n') + '\n');
+      const args = [];
+      if (modo === 'det') {
+        const marcadas = am.filter(a => (a.caixas || []).length);
+        if (marcadas.length < 3) return res.status(400).json({ error: `Marque caixas em pelo menos 3 quadros (há ${marcadas.length}). O ideal são 15 ou mais, com a pilha em alturas diferentes.` });
+        fs.mkdirSync(path.join(dir, 'images')); fs.mkdirSync(path.join(dir, 'labels'));
+        for (const a of am) {
+          fs.writeFileSync(path.join(dir, 'images', `a${a.id}.jpg`), a.jpeg);
+          fs.writeFileSync(path.join(dir, 'labels', `a${a.id}.txt`), (a.caixas || []).map(c => `${Math.max(0, CLASSES_DET.indexOf(c.c || 'caixa'))} ${(c.x + c.w / 2).toFixed(5)} ${(c.y + c.h / 2).toFixed(5)} ${c.w.toFixed(5)} ${c.h.toFixed(5)}`).join('\n') + '\n');
+        }
+        args.push('--classes', CLASSES_DET.join(','));
+      } else {
+        const v = am.filter(a => a.rotulo === 'vazio'), c = am.filter(a => a.rotulo === 'com_pecas');
+        if (v.length < 3 || c.length < 3) return res.status(400).json({ error: `Capture pelo menos 3 quadros de pallet VAZIO e 3 COM PEÇAS (há ${v.length} e ${c.length}). O ideal são 10 ou mais de cada.` });
+        fs.mkdirSync(path.join(dir, 'vazio')); fs.mkdirSync(path.join(dir, 'com_pecas'));
+        for (const a of am) if (a.rotulo) fs.writeFileSync(path.join(dir, a.rotulo, `a${a.id}.jpg`), a.jpeg);
+        const l = await carregarLinha(linhaId, produtoId); const z = l && l.config.zona;
+        if (z) args.push('--zona', `${z.x},${z.y},${z.w},${z.h}`);
       }
       const saida = path.join(dir, 'modelo.onnx');
-      const epocas = Math.min(80, Math.max(5, Number(req.body.epocas) || 40)), imgsz = [320, 416, 480, 640].includes(Number(req.body.imgsz)) ? Number(req.body.imgsz) : 416;
-      const t = { estado: 'rodando', progresso: 0, total: epocas, log: [], inicio: Date.now(), fim: null, erro: null, amostras: am.length };
+      const epocas = Math.min(80, Math.max(5, Number(req.body.epocas) || 40));
+      const imgsz = modo === 'cls' ? 224 : ([320, 416, 480, 640].includes(Number(req.body.imgsz)) ? Number(req.body.imgsz) : 416);
+      const t = { estado: 'rodando', progresso: 0, total: epocas, log: [], inicio: Date.now(), fim: null, erro: null, amostras: am.length, modo };
       TREINOS.set(chave, t);
-      const proc = spawn(PY, [path.join(__dirname, '..', 'python', 'treinar.py'), '--dados', dir, '--saida', saida, '--epocas', String(epocas), '--imgsz', String(imgsz), '--batch', '4'], { env: { ...process.env, YOLO_VERBOSE: 'False', OMP_NUM_THREADS: '2' } });
+      const proc = spawn(PY, [path.join(__dirname, '..', 'python', 'treinar.py'), '--modo', modo, '--dados', dir, '--saida', saida, '--epocas', String(epocas), '--imgsz', String(imgsz), '--batch', '4', ...args], { env: { ...process.env, YOLO_VERBOSE: 'False', OMP_NUM_THREADS: '2' } });
       const ler = (chunk) => String(chunk).split('\n').forEach(l => {
         l = l.trim(); if (!l) return;
         const m = /^PROGRESSO (\d+)\/(\d+)/.exec(l); if (m) { t.progresso = Number(m[1]); t.total = Number(m[2]); }
@@ -507,8 +527,8 @@ router.post('/linhas/:id/treinar', requireAuth, naoPcp, async (req, res) => {
         try {
           if (code !== 0 || !fs.existsSync(saida)) throw new Error('Treino terminou com erro (código ' + code + '): ' + t.log.filter(l => /ERRO|Error/.test(l)).slice(-2).join(' | '));
           const onnx = fs.readFileSync(saida);
-          const r = await pool.query('INSERT INTO cont_modelos (linha_id, produto_id, onnx, imgsz, metricas, amostras) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
-            [linhaId, produtoId, onnx, imgsz, JSON.stringify(t.metricas || {}), am.length]);
+          const r = await pool.query('INSERT INTO cont_modelos (linha_id, produto_id, onnx, imgsz, tipo, classes, metricas, amostras) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
+            [linhaId, produtoId, onnx, imgsz, modo, modo === 'cls' ? JSON.stringify((t.metricas && t.metricas.classes) || ['com_pecas', 'vazio']) : JSON.stringify(CLASSES_DET), JSON.stringify(t.metricas || {}), am.length]);
           await pool.query('UPDATE cont_linhas SET updated_at = NOW() WHERE id = $1', [linhaId]);   // o aparelho vê config_ts mudar e baixa o modelo
           t.estado = 'concluido'; t.modelo_id = r.rows[0].id; t.tamanho = onnx.length;
         } catch (e) { t.estado = 'erro'; t.erro = e.message; }

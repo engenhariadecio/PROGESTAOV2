@@ -142,10 +142,26 @@ async function iniciar() {
       await seed();
     }
 
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`› Servidor no ar na porta ${PORT}`);
+    /* HTTPS=1: sobe com certificado autoassinado (rede local). A câmera do celular só
+       abre em HTTPS — no primeiro acesso o navegador avisa "não seguro": Avançado → Continuar. */
+    const aoSubir = (proto) => () => {
+      console.log(`› Servidor no ar: ${proto}://localhost:${PORT}`);
+      const nets = require('os').networkInterfaces();
+      for (const k of Object.keys(nets)) for (const n of nets[k]) if (n.family === 'IPv4' && !n.internal) console.log(`›   na rede local: ${proto}://${n.address}:${PORT}`);
       console.log(`› Ambiente: ${EM_PRODUCAO ? 'produção' : 'desenvolvimento'}`);
-    });
+    };
+    if (process.env.HTTPS === '1') {
+      const fs = require('fs'), path = require('path');
+      const dir = path.join(__dirname, '.cert'), kf = path.join(dir, 'key.pem'), cf = path.join(dir, 'cert.pem');
+      if (!fs.existsSync(kf) || !fs.existsSync(cf)) {
+        const pems = require('selfsigned').generate([{ name: 'commonName', value: 'decio-montagem.local' }], { days: 3650, keySize: 2048, algorithm: 'sha256', extensions: [{ name: 'subjectAltName', altNames: [{ type: 2, value: 'localhost' }, { type: 7, ip: '127.0.0.1' }] }] });
+        fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(kf, pems.private); fs.writeFileSync(cf, pems.cert);
+        console.log('› Certificado autoassinado gerado em .cert/');
+      }
+      require('https').createServer({ key: fs.readFileSync(kf), cert: fs.readFileSync(cf) }, app).listen(PORT, '0.0.0.0', aoSubir('https'));
+    } else {
+      app.listen(PORT, '0.0.0.0', aoSubir('http'));
+    }
   } catch (err) {
     console.error('Falha ao iniciar:', err);
     process.exit(1);

@@ -36,6 +36,24 @@ Os sistemas eram independentes e guardavam dados em lugares diferentes. Agora co
 - As consultas de aniversariantes usavam `HAVING` sem `GROUP BY`, o que o Postgres rejeita. Reescritas com subquery.
 - Layout retematizado com a identidade da Décio.
 
+**Só conta quando alguém mexe no pallet; deploy pelo Dockerfile (22/10/2026)**
+- A IA de pessoas (MediaPipe Pose) passou a acompanhar as **mãos** (pulsos e dedos). Uma colocação/retirada só é contada se, nos ~25 s anteriores, uma **mão entrou na área do pallet**, a IA viu a **pessoa** sobre ele ou houve **movimento grande/contínuo** ali. Caixa que "aparece" ou "some" sem ninguém mexer (sombra, reflexo, a IA oscilando) só ajusta a referência, sem contar. O HUD mostra "✋ mão no pallet" e as mãos como pontos.
+- Área automática acima do pallet vale para qualquer ângulo (de lado, de cima, inclinado) e não "pula" quando alguém tapa o pallet (só se move se o pallet aparecer em outro lugar em 4 leituras seguidas).
+- *Ensinar a IA › Treinar*: opção **usar os quadros de todas as câmeras** — um modelo só com vários ângulos.
+- `railway.json` agora usa **builder DOCKERFILE** (antes era NIXPACKS e o Dockerfile era ignorado, então o treino nunca era instalado no Railway). O primeiro build demora ~10 min; health check com 300 s.
+
+**IA com 3 classes: CAIXA, PEÇA e PALLET (21/10/2026)**
+- Em *Ensinar a IA › Contar cada caixa/peça no pallet* (agora o modo padrão), cada retângulo tem uma classe: **Caixa**, **Peça** ou **Pallet** (botões coloridos antes de arrastar). O treino gera um detector com as 3 classes (`treinar.py --classes caixa,peca,pallet`; métricas por classe aparecem no painel).
+- Na câmera: a IA acha o **pallet** sozinha e conta só o que está em cima dele (coluna acima do pallet) — **não precisa marcar área** (se marcar, a área marcada manda). Cada classe é comparada com a última contagem estável (cena parada, ninguém na frente, ~2,5 s): **+n colocadas / −n retiradas**, com o detalhe *caixa* ou *peça* gravado no evento (`cont_eventos.detalhe`). **Pallet sumiu** = "pallet saiu" e **pallet novo** = "pallet novo vazio/com itens" — registrados como troca, não como retiradas. O HUD e o painel mostram "PALLET VAZIO", "pallet com 2 caixas, 1 peça" ou "sem pallet".
+- Modelos antigos de 1 classe continuam funcionando como antes.
+
+**Modo "pallet vazio × com peças" (21/10/2026)**
+- Em *Ensinar a IA* há agora dois modos. **Pallet vazio × com peças** (padrão): não precisa marcar retângulo — só capturar quadros com os botões *pallet VAZIO* / *COM PEÇAS* (10 ou mais de cada, variando quantidade, posição, luz e gente ao redor) e *Treinar* (2–5 min; classificador YOLOv8n-cls sobre o recorte da área do pallet, `python/pesos/yolov8n-cls.pt`). A câmera passa a classificar a área o tempo todo e conta **+1 cada vez que o pallet sai de vazio para com peças**; quando volta a vazio registra *pallet liberado*. Se a área marcada mudar, treine de novo. **Contar cada peça** continua sendo o modo com retângulos.
+- Tabelas: `cont_amostras.rotulo`, `cont_modelos.tipo/classes`. `treinar.py --modo cls --zona x,y,w,h`. O servidor de teste em Python também suporta.
+
+**Rodar no PC com HTTPS (20/10/2026)**
+- `HTTPS=1` no `.env` sobe o servidor em HTTPS com certificado autoassinado (gerado em `.cert/`), para a câmera dos tablets/celulares funcionar na rede local sem Railway. O console mostra os IPs da rede. Passo a passo para Windows na seção *Rodar na sua máquina*.
+
 **IA de verdade: ensinar a câmera a reconhecer as caixas/peças (20/10/2026)**
 - Painel das câmeras › Configurar › aba **Ensinar a IA**: *Capturar quadro da câmera* → arrastar um retângulo em volta de cada caixa/peça → *Salvar*. Com 15–30 quadros marcados (pilha vazia, meio, cheia, gente passando), **Treinar IA** (5–15 min). O servidor treina um detector YOLOv8n (partindo dos pesos Open Images, que já conhecem "Box") só com as caixas daquela câmera/produto e exporta ONNX; o aparelho baixa sozinho e passa a contar **por reconhecimento**: conta as caixas detectadas dentro da área e, quando a contagem fica estável por ~2,5 s sem ninguém na frente, registra +n ou −n. Sem modelo treinado, continua a contagem por diferença de imagem.
 - Modelo por câmera e, se quiser, por produto (o produto sobrepõe o geral). "Remover modelo" volta ao modo anterior. Tabelas `cont_amostras` e `cont_modelos`; rotas `/api/contador/linhas/:id/amostras|treinar|treino|modelo`.
@@ -195,6 +213,40 @@ Entre com `ADMIN_USER` / `ADMIN_PASS` e **troque a senha imediatamente** em *Adm
 ---
 
 ## Rodar na sua máquina
+
+**Só para testar a câmera/IA, sem instalar nada (Python puro):**
+
+```bat
+python servidor_teste.py
+```
+Serve as mesmas páginas e o mesmo motor da câmera do sistema publicado, com um servidor mínimo no lugar do Node/Postgres (uma linha fixa "Teste", dados em `teste_dados/`). No PC: `https://localhost:3000/cadenciador/painel`; no celular/tablet: `https://IP-DO-PC:3000/cadenciador/camera` (aceite o aviso do certificado). Marcar área, capturar quadros, ensinar e treinar a IA funcionam; o treino exige `python -m pip install -r python/requirements-local.txt`. Não tem login, cadenciador nem banco — é só para ver se a câmera reconhece.
+
+**Jeito mais fácil para rodar o sistema inteiro — só com Python (sem instalar Node nem Postgres):**
+
+```bat
+python iniciar_pc.py
+```
+Precisa de Python 3.10, 3.11 ou 3.12 (se o seu for 3.13+, instale também o 3.12 e use `py -3.12 iniciar_pc.py`). Na primeira vez ele baixa um Node.js e um PostgreSQL embutidos via `pip`, cria o banco em `.banco/`, grava o `.env`, roda o `npm install` e sobe em `https://localhost:3000` (mostra também o endereço na rede local para os tablets). Depois é só rodar o mesmo comando; `Ctrl+C` para. Para o treino da IA: `python -m pip install -r python\requirements-local.txt`.
+
+**Windows, passo a passo com Node e Postgres instalados (para usar o sistema no PC com os tablets/celulares na mesma rede):**
+
+1. Instale o **Node.js LTS** (nodejs.org) e o **PostgreSQL** (postgresql.org › Windows installer; anote a senha do usuário `postgres`).
+2. No *pgAdmin* (vem com o Postgres) ou no `psql`, crie o banco: `CREATE DATABASE decio;`
+3. Descompacte o projeto numa pasta (ex.: `C:\decio`). Copie `.env.example` para `.env` e ajuste `DATABASE_URL` com a sua senha:
+   `DATABASE_URL=postgres://postgres:SUA_SENHA@localhost:5432/decio`
+4. No *Prompt de Comando* dentro da pasta:
+   ```bat
+   npm install
+   npm start
+   ```
+   O console mostra os endereços, por exemplo `https://192.168.0.15:3000`.
+5. **Câmera**: o navegador só libera a câmera em HTTPS. O `.env.example` já vem com `HTTPS=1`: o sistema gera um certificado próprio e sobe em `https://`. No tablet/celular, abra `https://IP-DO-PC:3000`, o navegador avisa "conexão não segura" → *Avançado* → *Continuar*. Feito uma vez, não pergunta mais. (No próprio PC, `http://localhost:3000` também libera a câmera.)
+6. **Treinar a IA** (opcional): instale o **Python 3.10+** (python.org, marque *Add to PATH*) e rode `pip install -r python\requirements-local.txt` (baixa ~1 GB; só uma vez). No `.env`, `PYTHON_BIN=python`. Sem isso tudo funciona, só o botão *Treinar IA* fica indisponível.
+7. Libere a porta 3000 no Firewall do Windows (ou aceite o aviso na primeira execução) para os tablets enxergarem o PC. Para o PC ser um "servidor" de verdade, deixe-o ligado e com IP fixo no roteador.
+
+Login inicial: `admin` / senha do `ADMIN_PASS` do `.env`.
+
+**Linux/Mac:**
 
 ```bash
 npm install
