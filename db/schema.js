@@ -599,6 +599,7 @@ CREATE TABLE IF NOT EXISTS cont_amostras (
   largura       INTEGER NOT NULL DEFAULT 480,
   altura        INTEGER NOT NULL DEFAULT 360,
   caixas        JSONB NOT NULL DEFAULT '[]'::jsonb,
+  rotulo        VARCHAR(20),                           -- modo pallet: vazio | com_pecas
   usuario_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
@@ -609,6 +610,8 @@ CREATE TABLE IF NOT EXISTS cont_modelos (
   produto_id    INTEGER REFERENCES cad_produtos(id) ON DELETE CASCADE,
   onnx          BYTEA NOT NULL,
   imgsz         INTEGER NOT NULL DEFAULT 416,
+  tipo          VARCHAR(10) NOT NULL DEFAULT 'det',     -- det: conta peças | cls: pallet vazio x com peças
+  classes       JSONB,
   metricas      JSONB NOT NULL DEFAULT '{}'::jsonb,
   amostras      INTEGER NOT NULL DEFAULT 0,
   created_at    TIMESTAMPTZ DEFAULT NOW()
@@ -709,6 +712,10 @@ CREATE TRIGGER trg_fotos_${tabela} AFTER DELETE ON ${tabela}
 const SQL_MIGRACOES = `
 ALTER TABLE users             ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
 ALTER TABLE cont_eventos      ADD COLUMN IF NOT EXISTS linha_id INTEGER REFERENCES cont_linhas(id) ON DELETE SET NULL;
+ALTER TABLE cont_amostras     ADD COLUMN IF NOT EXISTS rotulo VARCHAR(20);
+ALTER TABLE cont_eventos      ADD COLUMN IF NOT EXISTS detalhe VARCHAR(60);   -- caixa | peca | pallet saiu | pallet novo
+ALTER TABLE cont_modelos      ADD COLUMN IF NOT EXISTS tipo VARCHAR(10) NOT NULL DEFAULT 'det';
+ALTER TABLE cont_modelos      ADD COLUMN IF NOT EXISTS classes JSONB;
 
 ALTER TABLE colaboradores     ADD COLUMN IF NOT EXISTS mat VARCHAR(50);
 ALTER TABLE colaboradores     ADD COLUMN IF NOT EXISTS cargo VARCHAR(120);
