@@ -199,10 +199,13 @@ tbody tr.agora td:first-child { box-shadow: inset 3px 0 0 var(--verde); }
     <div class="cartao-topo">
       <h2 class="cartao-titulo">Câmera do pallet — contagem <span class="selo selo-neutro" id="camSelo">sem câmera</span></h2>
       <div class="linha-flex">
+        <button class="btn btn-primario btn-sm" id="btnEnsinar">🧠 Ensinar a IA deste produto</button>
+        <button class="btn btn-fantasma btn-sm" id="btnCamArea">▭ Área e câmera</button>
         <a class="btn btn-fantasma btn-sm" href="/cadenciador/painel" target="_blank">Painel das câmeras</a>
         <button class="btn btn-fantasma btn-sm" id="btnCamParar" style="display:none">Desligar câmera</button>
       </div>
     </div>
+    <div class="cartao-corpo" id="camIaStatus" style="padding-bottom:0"></div>
     <!-- passo: conectar -->
     <div class="cartao-corpo" id="camConectar">
       <p class="ajuda" style="margin-bottom:12px">Linha iniciada. Agora conecte a câmera que vai olhar o pallet desta célula:</p>
@@ -289,6 +292,7 @@ tbody tr.agora td:first-child { box-shadow: inset 3px 0 0 var(--verde); }
   </section>
 </main>
 
+<div id="mEnsinar" style="position:fixed;inset:0;z-index:950;display:none;background:var(--fundo)"><iframe id="ifEnsinar" title="Ensinar a IA" style="width:100%;height:100%;border:0"></iframe></div>
 <div class="modal-fundo" id="mQr"><div class="modal">
   <div class="modal-topo"><div class="modal-titulo">Conectar um celular como câmera</div><button class="modal-fechar" onclick="fecharModal('mQr')">×</button></div>
   <div class="modal-corpo" style="text-align:center">
@@ -596,6 +600,7 @@ async function iniciarCamera(s) {
   LINHA_CAM = await tentar(() => API.post('/api/contador/linhas', { celula, produto_id: s.produto_id }));
   if (!LINHA_CAM) return;
   $c('cartaoCamera').style.display = ''; $c('chaoCamCaixa').style.display = '';
+  statusIa();
   if (CAM && CAM.ativo) { await CAM.trocarSessao(s.produto_id, s.id); atualizarPlacarCam(); return; }
   mostrarPassoCam('conectar');
   await verificarCamRemota();
@@ -631,12 +636,37 @@ async function conectarCamAqui() {
     onSessao: () => atualizarPlacarCam(),
     onConfig: (cfg, zona) => { $c('camDica').style.display = (zona || (CAM && CAM.modelo && CAM.modelo.tipo !== 'cls')) ? 'none' : ''; $c('camMult').checked = !!cfg.multiplas; $c('camInfo').innerHTML = (CAM && CAM.modelo ? (CAM.modelo.tipo === 'cls' ? '<b>IA treinada</b>: pallet vazio × com peças' : '<b>IA treinada</b>: reconhece pallet, caixas e peças; conta cada uma colocada (+1) e retirada (−1)') : `Sem IA treinada ainda — contando por diferença de imagem (sensibilidade ${cfg.sens}/10). Ensine a IA no painel das câmeras › Configurar › Ensinar a IA`) + ' · zoom e câmera ajustam-se pelo painel no PC'; },
     onEncerrar: () => { CAM = null; mostrarPassoCam('conectar'); },
-    onModelo: m => { $c('camSelo').textContent = m ? 'IA treinada ativa' : 'câmera deste aparelho'; if (m) avisoOk('IA treinada carregada: a contagem passa a ser por reconhecimento das caixas.'); }
+    onModelo: m => { $c('camSelo').textContent = m ? 'IA treinada ativa' : 'câmera deste aparelho'; if (m) avisoOk('IA treinada carregada: a contagem passa a ser por reconhecimento das caixas.'); statusIa(); }
   });
   try { await CAM.conectar({ linhaId: LINHA_CAM.id, produtoId: s.produto_id, sessaoId: s.id }); }
   catch (e) { avisoErro('Câmera: ' + e.message); CAM = null; mostrarPassoCam('conectar'); return; }
   localStorage.setItem('cad.camera', 'aqui');
   atualizarPlacarCam();
+}
+/* Ensinar a IA: abre o treino desta célula + produto em tela cheia, sem sair do Cadenciador */
+function abrirEnsinar(aba) {
+  if (!LINHA_CAM || !SESSAO) return avisoErro('Inicie a linha com a célula escolhida primeiro.');
+  const camLigada = (CAM && CAM.ativo) || camRemotaOnline;
+  if (aba === 'ia' && !camLigada) avisoErro('Conecte a câmera antes: os quadros de treino saem dela.');
+  $c('ifEnsinar').src = `/cadenciador/painel?linha=${LINHA_CAM.id}&produto=${SESSAO.produto_id}&aba=${aba}&embed=1`;
+  $c('mEnsinar').style.display = 'block';
+}
+window.addEventListener('message', ev => {
+  if (ev.origin !== location.origin || !ev.data || ev.data.tipo !== 'fechar-ensinar') return;
+  $c('mEnsinar').style.display = 'none'; $c('ifEnsinar').src = 'about:blank'; statusIa();
+});
+$c('btnEnsinar').onclick = () => abrirEnsinar('ia');
+$c('btnCamArea').onclick = () => abrirEnsinar('area');
+/* mostra se este produto já tem IA treinada */
+async function statusIa() {
+  const el = $c('camIaStatus'); if (!LINHA_CAM || !SESSAO) { el.innerHTML = ''; return; }
+  const m = await API.get(`/api/contador/linhas/${LINHA_CAM.id}/modelo?info=1&produto_id=${SESSAO.produto_id}`).catch(() => null);
+  const prod = escapar(SESSAO.produto_nome || 'este produto');
+  if (!m) el.innerHTML = `<div class="aviso-faixa" style="background:var(--alerta-bg);border:1px solid var(--alerta-bd);color:var(--alerta);padding:10px 12px;border-radius:10px;font-size:13px">⚠ <b>${prod}</b> ainda não tem IA treinada nesta célula — a contagem usa só diferença de imagem. Clique em <b>🧠 Ensinar a IA deste produto</b>.</div>`;
+  else {
+    const k = m.metricas || {}, ac = m.tipo === 'cls' ? k.acerto : k.map50;
+    el.innerHTML = `<div style="background:var(--fade-suave);border:1px solid rgba(38,178,71,.3);padding:10px 12px;border-radius:10px;font-size:13px">✓ IA treinada ${m.produto_id ? 'para <b>' + prod + '</b>' : '<b>geral desta câmera</b> (vale para todos os produtos; dá para treinar uma específica para ' + prod + ')'} · ${m.amostras} quadros · acerto no treino ${ac != null ? Math.round(ac * 100) + '%' : '—'} · ${new Date(m.created_at).toLocaleDateString('pt-BR')}</div>`;
+  }
 }
 $c('btnCamAqui').onclick = conectarCamAqui; $c('btnCamAqui2').onclick = conectarCamAqui;
 $c('btnCamQr').onclick = abrirQrCam; $c('btnCamQr2').onclick = abrirQrCam;

@@ -59,6 +59,11 @@
 .cfg .cmds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .lbl { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
 .qr { text-align: center; }
+/* embutido no Cadenciador: só o modal, ocupando a tela */
+html.embed body { background: var(--fundo); }
+html.embed #topo, html.embed .fita-marca, html.embed main.conteudo { display: none !important; }
+html.embed #mCfg { background: var(--fundo); padding: 0; }
+html.embed #mCfg .modal { max-width: none !important; width: 100%; max-height: 100vh; height: 100vh; border-radius: 0; border: 0; }
 .cfg-abas { display: flex; gap: 6px; margin-bottom: 14px; }
 .cfg-abas .btn.sel { background: var(--verde); color: #fff; border-color: var(--verde); }
 .ens { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; }
@@ -204,7 +209,7 @@ td img { width: 72px; height: 54px; object-fit: cover; border-radius: 6px; curso
         <div class="grupo"><h5>Treinar</h5>
           <div class="campo"><span class="rotulo">Para</span><select class="controle" id="ensProduto"></select></div>
           <div class="campo"><span class="rotulo">Qualidade</span><select class="controle" id="ensEpocas"><option value="25">Rápido (25 passadas)</option><option value="40" selected>Normal (40)</option><option value="70">Caprichado (70)</option></select></div>
-          <label class="lbl"><input type="checkbox" id="ensTodas"> Usar os quadros de <b>todas as câmeras</b> (vários ângulos num modelo só)</label>
+          <label class="lbl"><input type="checkbox" id="ensTodas"> <span>Usar os quadros de <b>todas as câmeras</b> (vários ângulos num modelo só)</span></label>
           <button class="btn btn-primario" id="ensTreinar">🧠 Treinar IA</button>
           <div class="barra-prog" id="ensProg" style="display:none"><i></i></div>
           <div class="ajuda" id="ensStatus"></div>
@@ -369,7 +374,11 @@ async function abrirCfg(id) {
   abrirModal('mCfg'); atualizarCfgVivo(); desenharCfg(); resumoCfg();
   cfgTimer = setInterval(desenharCfg, 300);
 }
-function fecharCfg() { fecharModal('mCfg'); cfgLinha = null; clearInterval(cfgTimer); clearInterval(ensTimer); ensAmostra = null; ensSujo = false; }
+function fecharCfg() {
+  if (ensSujo && !confirm('Há marcações não salvas neste quadro. Fechar mesmo assim?')) return;
+  fecharModal('mCfg'); cfgLinha = null; clearInterval(cfgTimer); clearInterval(ensTimer); ensAmostra = null; ensSujo = false;
+  if (EMBED && window.parent !== window) window.parent.postMessage({ tipo: 'fechar-ensinar' }, location.origin);
+}
 /* a config efetiva = linha ⊕ produto escolhido */
 async function carregarCfgProduto() {
   const l = cfgLinha;
@@ -667,12 +676,23 @@ async function abrirAnalise(data, lid, sid) {
   document.querySelector('.aba[data-aba="analise"]').click();
 }
 
+/* Aberto de dentro do Cadenciador: /cadenciador/painel?linha=ID&produto=PID&aba=ia&embed=1
+   abre direto "Configurar câmera" daquela célula, na aba pedida, com o produto em linha já escolhido. */
+const PARAMS = new URLSearchParams(location.search), EMBED = PARAMS.get('embed') === '1';
+if (EMBED) document.documentElement.classList.add('embed');
 (async () => {
   USU = await montarTopo({ subtitulo: 'Cadenciador — painel das câmeras' });
   if (ehAdmin()) $('btnNova').style.display = '';
   $('aData').value = hojeISO();
   await carregarCadastros(); await atualizarLinhas(); preencherLinhasAnalise(); carregarSessoesFiltro();
   setInterval(atualizarLinhas, 900);
+  const lid = Number(PARAMS.get('linha'));
+  if (lid && linhasCache.some(l => l.id === lid)) {
+    await abrirCfg(lid);
+    const pid = Number(PARAMS.get('produto')) || null;
+    if (pid) { cfgProduto = pid; $('cProduto').value = pid; await carregarCfgProduto(); }
+    const aba = PARAMS.get('aba'); if (aba) document.querySelector(`[data-cfgaba="${aba}"]`).click();
+  }
 })();
 </script>
 </body>
