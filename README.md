@@ -36,6 +36,11 @@ Os sistemas eram independentes e guardavam dados em lugares diferentes. Agora co
 - As consultas de aniversariantes usavam `HAVING` sem `GROUP BY`, o que o Postgres rejeita. Reescritas com subquery.
 - Layout retematizado com a identidade da Décio.
 
+**Ensinar a IA de dentro do Cadenciador (22/10/2026)**
+- No cartão *Câmera do pallet* do Cadenciador: **🧠 Ensinar a IA deste produto** e **▭ Área e câmera**. Abrem em tela cheia, sem sair do Cadenciador, a tela de treino já na célula e no **produto em linha** (o modelo fica salvo para aquele produto naquela célula). Ao fechar, volta ao Cadenciador e o tablet baixa o modelo sozinho.
+- O cartão mostra se o produto em linha já tem IA treinada ("✓ IA treinada para X · N quadros · acerto 99%") ou o aviso para treinar. Se houver só o modelo geral da câmera, avisa que dá para treinar um específico.
+- O painel das câmeras aceita `?linha=ID&produto=PID&aba=ia|area&embed=1` (abre direto no treino/área daquela câmera).
+
 **Só conta quando alguém mexe no pallet; deploy pelo Dockerfile (22/10/2026)**
 - A IA de pessoas (MediaPipe Pose) passou a acompanhar as **mãos** (pulsos e dedos). Uma colocação/retirada só é contada se, nos ~25 s anteriores, uma **mão entrou na área do pallet**, a IA viu a **pessoa** sobre ele ou houve **movimento grande/contínuo** ali. Caixa que "aparece" ou "some" sem ninguém mexer (sombra, reflexo, a IA oscilando) só ajusta a referência, sem contar. O HUD mostra "✋ mão no pallet" e as mãos como pontos.
 - Área automática acima do pallet vale para qualquer ângulo (de lado, de cima, inclinado) e não "pula" quando alguém tapa o pallet (só se move se o pallet aparecer em outro lugar em 4 leituras seguidas).
